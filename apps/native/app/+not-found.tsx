@@ -1,27 +1,27 @@
-import { Link, Stack } from "expo-router";
-import { Button, Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 
-import { Container } from "@/components/container";
+import { ActionButton, Screen } from "@/components/screen";
+import { colors, typography } from "@/lib/theme";
 
 export default function NotFoundScreen() {
+  const router = useRouter();
+
   return (
-    <>
-      <Stack.Screen options={{ title: "Not Found" }} />
-      <Container>
-        <View className="flex-1 justify-center items-center p-4">
-          <Surface variant="secondary" className="items-center p-6 max-w-sm rounded-lg">
-            <Text className="text-4xl mb-3">🤔</Text>
-            <Text className="text-foreground font-medium text-lg mb-1">Page Not Found</Text>
-            <Text className="text-muted text-sm text-center mb-4">
-              The page you're looking for doesn't exist.
-            </Text>
-            <Link href="/" asChild>
-              <Button size="sm">Go Home</Button>
-            </Link>
-          </Surface>
-        </View>
-      </Container>
-    </>
+    <Screen>
+      <View style={styles.content}>
+        <Text style={styles.code}>404 / MISFILED</Text>
+        <Text style={styles.title}>This page is not in the folder.</Text>
+        <Text style={styles.copy}>Return to the vault and keep moving.</Text>
+        <ActionButton onPress={() => router.replace("/(tabs)")}>Return home</ActionButton>
+      </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { flex: 1, justifyContent: "center", alignItems: "flex-start", gap: 16 },
+  code: { color: colors.rust, fontFamily: typography.label, fontWeight: "800", fontSize: 11, letterSpacing: 1.5 },
+  title: { color: colors.ink, fontFamily: typography.display, fontWeight: "700", fontSize: 36, lineHeight: 41 },
+  copy: { color: colors.inkMuted, fontSize: 14, marginBottom: 8 },
+});
