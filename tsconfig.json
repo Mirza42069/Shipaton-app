@@ -1,0 +1,3 @@
+{
+  "extends": "@Mobile-APP/config/tsconfig.base.json"
+}
