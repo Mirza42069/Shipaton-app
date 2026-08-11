@@ -1,22 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useDeferredValue, useState } from "react";
 import {
   FlatList,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
+import { Chip, Searchbar, Text } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { appIconSource } from "@/components/app-icon";
 import { DocumentCard } from "@/components/document-card";
 import { EmptyVault } from "@/components/empty-vault";
+import { PageHeader, Screen } from "@/components/screen";
 import { useVault } from "@/contexts/vault-context";
-import { colors, typography } from "@/lib/theme";
+import { colors, radii, spacing, typography } from "@/lib/theme";
 import {
   DOCUMENT_KIND_DEFINITIONS,
   type DocumentKind,
@@ -26,7 +24,6 @@ import {
 type Filter = "all" | DocumentKind;
 
 export default function VaultScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { documents } = useVault();
@@ -53,37 +50,30 @@ export default function VaultScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: Math.max(insets.top, 18) }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>ENCRYPTED INDEX</Text>
-          <Text style={styles.title}>The vault</Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Add document"
-          onPress={() => router.push("/add")}
-          style={({ pressed }) => [styles.add, pressed && styles.pressed]}
-        >
-          <Ionicons name="add" size={26} color={colors.signal} />
-        </Pressable>
-      </View>
+    <Screen
+      scroll={false}
+      style={[styles.screenContent, { paddingTop: Math.max(insets.top, spacing.xl) }]}
+    >
+      <PageHeader
+        title="Vault"
+        showSettings
+      />
 
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={20} color={colors.inkMuted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search names, notes, file names"
-          placeholderTextColor={colors.inkMuted}
-          style={styles.searchInput}
-          returnKeyType="search"
-        />
-        {query ? (
-          <Pressable onPress={() => setQuery("")} hitSlop={8}>
-            <Ionicons name="close-circle" size={20} color={colors.inkMuted} />
-          </Pressable>
-        ) : null}
-      </View>
+      <Searchbar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search documents"
+        accessibilityLabel="Search documents"
+        clearAccessibilityLabel="Clear search"
+        returnKeyType="search"
+        elevation={0}
+        icon={appIconSource("search")}
+        clearIcon={appIconSource("close")}
+        iconColor={colors.forest}
+        placeholderTextColor={colors.inkMuted}
+        inputStyle={styles.searchInput}
+        style={styles.searchBox}
+      />
 
       <ScrollView
         horizontal
@@ -102,8 +92,9 @@ export default function VaultScreen() {
       </ScrollView>
 
       <View style={styles.resultRow}>
-        <Text style={styles.resultCount}>{filtered.length} FILES</Text>
-        <Text style={styles.resultRule}>LOCAL / AES-256</Text>
+        <Text style={styles.resultCount}>
+          {filtered.length} {filtered.length === 1 ? "DOCUMENT" : "DOCUMENTS"}
+        </Text>
       </View>
 
       <FlatList
@@ -115,109 +106,71 @@ export default function VaultScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, 20) + 92 }]}
         columnWrapperStyle={columns > 1 ? styles.column : undefined}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={<EmptyVault compact />}
       />
-    </View>
+    </Screen>
   );
 }
 
 function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.chip, active ? styles.chipActive : null]}>
-      <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{label}</Text>
-    </Pressable>
+    <Chip
+      mode={active ? "flat" : "outlined"}
+      selected={active}
+      showSelectedCheck={false}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[styles.chip, active ? styles.chipActive : null]}
+      textStyle={[styles.chipText, active ? styles.chipTextActive : null]}
+    >
+      {label}
+    </Chip>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
-  header: {
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  eyebrow: {
-    color: colors.forest,
-    fontFamily: typography.label,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.7,
-  },
-  title: {
-    color: colors.ink,
-    fontFamily: typography.display,
-    fontSize: 38,
-    fontWeight: "700",
-    letterSpacing: -1,
-    marginTop: 2,
-  },
-  add: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.forest,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pressed: { transform: [{ scale: 0.96 }] },
+  screenContent: { paddingBottom: 0 },
   searchBox: {
-    marginHorizontal: 20,
-    minHeight: 51,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.card,
+    height: 56,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.rule,
-    paddingHorizontal: 15,
   },
   searchInput: {
-    flex: 1,
     color: colors.ink,
     fontFamily: typography.body,
-    fontSize: 14,
-    paddingVertical: 14,
+    fontSize: 15,
+    minHeight: 0,
   },
-  filters: { gap: 8, paddingHorizontal: 20, paddingVertical: 16 },
+  filters: { gap: spacing.sm, paddingVertical: spacing.lg },
   chip: {
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-    borderWidth: 1,
     borderColor: colors.rule,
-    borderRadius: 20,
+    borderRadius: radii.full,
     backgroundColor: colors.card,
   },
-  chipActive: { backgroundColor: colors.forest, borderColor: colors.forest },
+  chipActive: { backgroundColor: colors.signal, borderColor: colors.signal },
   chipText: {
     color: colors.inkMuted,
     fontFamily: typography.label,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.4,
+    fontSize: 12,
+    letterSpacing: 0,
   },
-  chipTextActive: { color: colors.signal },
+  chipTextActive: { color: colors.forestDark },
   resultRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    alignItems: "center",
+    marginBottom: spacing.lg,
   },
   resultCount: {
-    color: colors.rust,
+    color: colors.forestDark,
     fontFamily: typography.label,
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 1.1,
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
-  resultRule: {
-    color: colors.inkMuted,
-    fontFamily: typography.label,
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  list: { flexGrow: 1, paddingHorizontal: 10, paddingTop: 8 },
+  list: { flexGrow: 1, paddingTop: spacing.xs },
   column: { alignItems: "stretch" },
-  cell: { paddingHorizontal: 10, paddingBottom: 28 },
+  cell: { paddingHorizontal: spacing.sm, paddingBottom: spacing.lg },
 });

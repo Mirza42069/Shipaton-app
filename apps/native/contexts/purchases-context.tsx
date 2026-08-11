@@ -11,7 +11,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 const ENTITLEMENT_ID = "pro";
 const galaxyApiKey = process.env.EXPO_PUBLIC_REVENUECAT_GALAXY_API_KEY;
@@ -53,14 +53,23 @@ export function PurchasesProvider({ children }: PropsWithChildren) {
     };
     Purchases.addCustomerInfoUpdateListener(listener);
 
-    void Promise.all([Purchases.getCustomerInfo(), Purchases.getOfferings()])
-      .then(([customerInfo, offerings]) => {
-        setIsPro(hasProEntitlement(customerInfo));
-        setPackages(offerings.current?.availablePackages ?? []);
-      })
-      .finally(() => setIsLoading(false));
+    function refreshPurchases() {
+      void Purchases.getCustomerInfo()
+        .then((customerInfo) => setIsPro(hasProEntitlement(customerInfo)))
+        .catch(() => undefined)
+        .finally(() => setIsLoading(false));
+      void Purchases.getOfferings()
+        .then((offerings) => setPackages(offerings.current?.availablePackages ?? []))
+        .catch(() => undefined);
+    }
+
+    refreshPurchases();
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshPurchases();
+    });
 
     return () => {
+      appStateSubscription.remove();
       Purchases.removeCustomerInfoUpdateListener(listener);
     };
   }, [isConfigured]);

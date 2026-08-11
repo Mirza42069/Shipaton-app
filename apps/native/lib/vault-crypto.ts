@@ -8,7 +8,7 @@ import {
 
 import { getVaultKeyHex } from "@/lib/vault-key";
 
-const MAGIC = new Uint8Array([0x50, 0x50, 0x56, 0x31]);
+const MAGIC = new Uint8Array([0x42, 0x4b, 0x56, 0x31]);
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
@@ -27,15 +27,46 @@ function hasMagic(bytes: Uint8Array) {
 }
 
 function vaultDirectory() {
-  const directory = new Directory(Paths.document, "pocketproof-vault");
+  const directory = new Directory(Paths.document, "berkas-vault");
   if (!directory.exists) directory.create({ idempotent: true, intermediates: true });
   return directory;
 }
 
 function previewDirectory() {
-  const directory = new Directory(Paths.cache, "pocketproof-preview");
+  const directory = new Directory(Paths.cache, "berkas-preview");
   if (!directory.exists) directory.create({ idempotent: true, intermediates: true });
   return directory;
+}
+
+function importDirectory() {
+  const directory = new Directory(Paths.cache, "berkas-import");
+  if (!directory.exists) directory.create({ idempotent: true, intermediates: true });
+  return directory;
+}
+
+export function stageTemporarySource(sourceUri: string, extension: string) {
+  const source = new File(sourceUri);
+  const destination = new File(
+    importDirectory(),
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${extension}`,
+  );
+  source.copy(destination);
+  try {
+    if (source.exists) source.delete();
+  } catch {
+    // Content providers own scanner URIs and may not permit callers to delete them.
+  }
+  return destination.uri;
+}
+
+export function writeTemporarySource(bytes: Uint8Array, extension: string) {
+  const destination = new File(
+    importDirectory(),
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${extension}`,
+  );
+  destination.create({ overwrite: false, intermediates: true });
+  destination.write(bytes);
+  return destination.uri;
 }
 
 export async function encryptIntoVault(sourceUri: string, documentId: string) {
@@ -64,7 +95,7 @@ export async function decryptForPreview(
   const payload = await encryptedFile.bytes();
 
   if (!hasMagic(payload)) {
-    throw new Error("This file is not a Pocketproof vault file.");
+    throw new Error("This file is not a Berkas vault file.");
   }
 
   const key = await AESEncryptionKey.import(await getVaultKeyHex(), "hex");
@@ -85,7 +116,26 @@ export function deleteVaultFile(uri: string) {
   if (file.exists) file.delete();
 }
 
+export function deleteTemporarySource(uri: string) {
+  const file = new File(uri);
+  try {
+    if (file.exists) file.delete();
+  } catch {
+    // A successful vault write must not be reported as failed due to provider cleanup.
+  }
+}
+
+export function deletePreviewFile(documentId: string, extension: string) {
+  const file = new File(Paths.cache, "berkas-preview", `${documentId}${extension}`);
+  if (file.exists) file.delete();
+}
+
 export function clearPreviewFiles() {
-  const directory = new Directory(Paths.cache, "pocketproof-preview");
+  const directory = new Directory(Paths.cache, "berkas-preview");
+  if (directory.exists) directory.delete();
+}
+
+export function clearTemporarySources() {
+  const directory = new Directory(Paths.cache, "berkas-import");
   if (directory.exists) directory.delete();
 }

@@ -7,9 +7,7 @@
       "packages/*"
     ],
     "catalog": {
-      "dotenv": "^17.4.2",
-      "zod": "^4.4.3",
-      "convex": "^1.42.3"
+      "zod": "^4.4.3"
     }
   },
   "type": "module",
@@ -17,14 +15,7 @@
     "dev": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
     "check-types": "bun run --filter '*' check-types",
-    "dev:native": "bun run --filter native dev",
-    "dev:server": "bun run --filter @Mobile-APP/backend dev",
-    "dev:setup": "bun run --filter @Mobile-APP/backend dev:setup"
-  },
-  "dependencies": {
-    "@Mobile-APP/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
+    "dev:native": "bun run --filter native dev"
   },
   "devDependencies": {
     "@Mobile-APP/config": "workspace:*",

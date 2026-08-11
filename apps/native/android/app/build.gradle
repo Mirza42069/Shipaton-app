@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'app.pocketproof.android'
+    namespace 'app.berkas.android'
     defaultConfig {
-        applicationId 'app.pocketproof.android'
+        applicationId 'app.berkas.android'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

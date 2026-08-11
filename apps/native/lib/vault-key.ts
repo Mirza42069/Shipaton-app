@@ -1,7 +1,7 @@
 import { getRandomBytesAsync } from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 
-const VAULT_KEY_NAME = "pocketproof.vault-key.v1";
+const VAULT_KEY_NAME = "berkas.vault-key.v1";
 
 function bytesToHex(bytes: Uint8Array) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");

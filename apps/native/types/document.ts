@@ -1,3 +1,5 @@
+import type { AppIconName } from "@/components/app-icon";
+
 export const DOCUMENT_KINDS = [
   "identity",
   "travel",
@@ -39,16 +41,16 @@ export type DocumentKindDefinition = {
   value: DocumentKind;
   label: string;
   shortLabel: string;
-  icon: string;
+  icon: AppIconName;
 };
 
 export const DOCUMENT_KIND_DEFINITIONS: DocumentKindDefinition[] = [
-  { value: "identity", label: "Identity", shortLabel: "ID", icon: "finger-print-outline" },
-  { value: "travel", label: "Travel", shortLabel: "TRAVEL", icon: "airplane-outline" },
-  { value: "home", label: "Home", shortLabel: "HOME", icon: "home-outline" },
-  { value: "finance", label: "Finance", shortLabel: "MONEY", icon: "wallet-outline" },
-  { value: "health", label: "Health", shortLabel: "HEALTH", icon: "medical-outline" },
-  { value: "education", label: "Education", shortLabel: "STUDY", icon: "school-outline" },
-  { value: "work", label: "Work", shortLabel: "WORK", icon: "briefcase-outline" },
-  { value: "other", label: "Other", shortLabel: "OTHER", icon: "document-outline" },
+  { value: "identity", label: "Identity", shortLabel: "ID", icon: "biometric" },
+  { value: "travel", label: "Travel", shortLabel: "TRAVEL", icon: "travel" },
+  { value: "home", label: "Home", shortLabel: "HOME", icon: "home" },
+  { value: "finance", label: "Finance", shortLabel: "MONEY", icon: "wallet" },
+  { value: "health", label: "Health", shortLabel: "HEALTH", icon: "health" },
+  { value: "education", label: "Education", shortLabel: "STUDY", icon: "education" },
+  { value: "work", label: "Work", shortLabel: "WORK", icon: "work" },
+  { value: "other", label: "Other", shortLabel: "OTHER", icon: "other" },
 ];

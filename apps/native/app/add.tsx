@@ -1,25 +1,32 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import DocumentScanner from "react-native-document-scanner-plugin";
 import {
-  Alert,
-  Pressable,
-  StyleSheet,
+  Button,
+  Chip,
+  HelperText,
+  IconButton,
+  Surface,
   Text,
   TextInput,
-  View,
-} from "react-native";
-import DocumentScanner from "react-native-document-scanner-plugin";
+} from "react-native-paper";
 
-import { ActionButton, Screen } from "@/components/screen";
+import { AppIcon, type AppIconName, appIconSource } from "@/components/app-icon";
+import { MaterialCard, PageHeader, Screen, SectionHeading } from "@/components/screen";
+import { usePaperwork } from "@/contexts/paperwork-context";
 import { usePurchases } from "@/contexts/purchases-context";
 import { useVault } from "@/contexts/vault-context";
+import { FREE_DOCUMENT_LIMIT } from "@/lib/access-policy";
 import { formatDate } from "@/lib/date";
-import { colors, typography } from "@/lib/theme";
+import { colors, radii, spacing, typography } from "@/lib/theme";
+import { deleteTemporarySource, stageTemporarySource } from "@/lib/vault-crypto";
 import {
+  DOCUMENT_KINDS,
   DOCUMENT_KIND_DEFINITIONS,
   type DocumentKind,
   type NewVaultDocument,
@@ -29,6 +36,10 @@ type SelectedFile = Pick<
   NewVaultDocument,
   "sourceUri" | "originalName" | "mimeType" | "fileExtension"
 >;
+
+type ImportMethod = "scan" | "file";
+
+const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
 function extensionFor(name: string, mimeType: string) {
   const match = name.match(/\.[a-z0-9]{1,8}$/i);
@@ -43,209 +54,390 @@ function defaultTitle(name: string) {
 }
 
 export default function AddDocumentScreen() {
+  const { runId, requirementId, preferredKind } = useLocalSearchParams<{
+    runId?: string;
+    requirementId?: string;
+    preferredKind?: string;
+  }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { documents, addDocument } = useVault();
-  const { isPro } = usePurchases();
+  const { linkDocument } = usePaperwork();
+  const { isPro, isLoading: isPurchasesLoading } = usePurchases();
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<DocumentKind>("identity");
+  const initialKind = DOCUMENT_KINDS.find((item) => item === preferredKind) ?? "identity";
+  const [kind, setKind] = useState<DocumentKind>(initialKind);
   const [expiry, setExpiry] = useState<Date | null>(null);
   const [notes, setNotes] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isImporting, setIsImporting] = useState<ImportMethod | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const selectedSourceUri = useRef<string | null>(null);
+  const wide = width >= 760;
+
+  useEffect(() => {
+    return () => {
+      if (selectedSourceUri.current) deleteTemporarySource(selectedSourceUri.current);
+    };
+  }, []);
+
+  function replaceSelectedFile(file: SelectedFile) {
+    if (selectedSourceUri.current) deleteTemporarySource(selectedSourceUri.current);
+    selectedSourceUri.current = file.sourceUri;
+    setSelectedFile(file);
+  }
 
   async function chooseFile() {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf", "image/*"],
-      copyToCacheDirectory: true,
-      multiple: false,
-      base64: false,
-    });
-    if (result.canceled) return;
+    if (isImporting || isSaving) return;
+    setIsImporting("file");
+    let stagedUri: string | null = null;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+        multiple: false,
+        base64: false,
+      });
+      if (result.canceled) return;
 
-    const asset = result.assets[0];
-    const mimeType = asset.mimeType ?? "application/octet-stream";
-    setSelectedFile({
-      sourceUri: asset.uri,
-      originalName: asset.name,
-      mimeType,
-      fileExtension: extensionFor(asset.name, mimeType),
-    });
-    if (!title) setTitle(defaultTitle(asset.name));
-    void Haptics.selectionAsync();
+      const asset = result.assets[0];
+      const mimeType = asset.mimeType ?? "application/octet-stream";
+      const fileExtension = extensionFor(asset.name, mimeType);
+      stagedUri = stageTemporarySource(asset.uri, fileExtension);
+      if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
+        deleteTemporarySource(stagedUri);
+        stagedUri = null;
+        Alert.alert("File too large", "Choose a PDF or image under 25 MB.");
+        return;
+      }
+      replaceSelectedFile({
+        sourceUri: stagedUri,
+        originalName: asset.name,
+        mimeType,
+        fileExtension,
+      });
+      stagedUri = null;
+      if (!title) setTitle(defaultTitle(asset.name));
+      void Haptics.selectionAsync();
+    } catch (error) {
+      if (stagedUri) deleteTemporarySource(stagedUri);
+      Alert.alert(
+        "Couldn't choose file",
+        error instanceof Error ? error.message : "File preparation failed.",
+      );
+    } finally {
+      setIsImporting(null);
+    }
   }
 
   async function scanPaper() {
-    const result = await DocumentScanner.scanDocument({
-      maxNumDocuments: 1,
-      croppedImageQuality: 92,
-    });
-    const uri = result.scannedImages?.[0];
-    if (!uri) return;
+    if (isImporting || isSaving) return;
+    setIsImporting("scan");
+    let stagedUri: string | null = null;
+    try {
+      const result = await DocumentScanner.scanDocument({
+        maxNumDocuments: 1,
+        croppedImageQuality: 92,
+      });
+      const uri = result.scannedImages?.[0];
+      if (!uri) return;
 
-    const fileName = `scan-${new Date().toISOString().slice(0, 10)}.jpg`;
-    setSelectedFile({
-      sourceUri: uri,
-      originalName: fileName,
-      mimeType: "image/jpeg",
-      fileExtension: ".jpg",
-    });
-    if (!title) setTitle("Scanned document");
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const fileName = `scan-${new Date().toISOString().slice(0, 10)}.jpg`;
+      stagedUri = stageTemporarySource(uri, ".jpg");
+      if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
+        deleteTemporarySource(stagedUri);
+        stagedUri = null;
+        Alert.alert("Scan too large", "Scan a document under 25 MB.");
+        return;
+      }
+      replaceSelectedFile({
+        sourceUri: stagedUri,
+        originalName: fileName,
+        mimeType: "image/jpeg",
+        fileExtension: ".jpg",
+      });
+      stagedUri = null;
+      if (!title) setTitle("Scanned document");
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      if (stagedUri) deleteTemporarySource(stagedUri);
+      Alert.alert(
+        "Couldn't scan",
+        error instanceof Error ? error.message : "Scan preparation failed.",
+      );
+    } finally {
+      setIsImporting(null);
+    }
   }
 
   async function save() {
+    if (isSaving || isImporting) return;
     if (!selectedFile || !title.trim()) {
-      Alert.alert("Document not ready", "Choose a file and give it a clear name first.");
+      Alert.alert("Document incomplete", "Choose a file and add a name.");
       return;
     }
-    if (!isPro && documents.length >= 10) {
+    if (!isPro && isPurchasesLoading) {
+      Alert.alert("Checking access", "Try again in a moment.");
+      return;
+    }
+    if (!isPro && documents.length >= FREE_DOCUMENT_LIMIT) {
       Alert.alert(
-        "Free vault is full",
-        "Pocketproof Free secures up to 10 documents. Unlock Pro from Settings for an unlimited vault.",
+        "Free limit reached",
+        `${FREE_DOCUMENT_LIMIT} free documents. Upgrade in Settings for unlimited storage.`,
       );
+      return;
+    }
+
+    const source = new File(selectedFile.sourceUri);
+    if (source.size > MAX_IMPORT_BYTES) {
+      Alert.alert("File too large", "Choose a PDF or image under 25 MB.");
       return;
     }
 
     setIsSaving(true);
+    let id: string;
     try {
-      const id = await addDocument({
+      id = await addDocument({
         ...selectedFile,
-        title,
+        title: title.trim(),
         kind,
         expiresAt: expiry ? expiry.toISOString().slice(0, 10) : null,
-        notes,
+        notes: notes.trim(),
       });
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace({ pathname: "/document/[id]", params: { id } });
     } catch (error) {
       Alert.alert(
-        "Could not secure document",
-        error instanceof Error ? error.message : "The document could not be encrypted.",
+        "Couldn't save document",
+        error instanceof Error ? error.message : "Saving failed.",
       );
       setIsSaving(false);
+      return;
+    }
+
+    if (selectedSourceUri.current === selectedFile.sourceUri) {
+      deleteTemporarySource(selectedFile.sourceUri);
+      selectedSourceUri.current = null;
+    }
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (runId && requirementId) {
+      try {
+        await linkDocument(runId, requirementId, id);
+      } catch {
+        Alert.alert(
+          "Document saved",
+          "Saved to the vault, but not linked to the plan.",
+        );
+      }
+      router.dismissTo({ pathname: "/paperwork/[id]", params: { id: runId } });
+    } else {
+      router.replace({ pathname: "/document/[id]", params: { id } });
     }
   }
 
+  const accessLabel = isPurchasesLoading
+    ? "Checking access..."
+    : isPro
+      ? "Pro: unlimited documents"
+      : `${documents.length} of ${FREE_DOCUMENT_LIMIT} free documents used`;
+
   return (
-    <Screen>
-      <Text style={styles.eyebrow}>01 / SOURCE</Text>
-      <Text style={styles.heading}>Bring one important thing in.</Text>
+    <Screen style={[styles.screenContent, wide ? styles.screenContentWide : null]}>
+      <PageHeader
+        eyebrow={runId ? "ADD TO PAPERWORK" : undefined}
+        title="Add document"
+      />
 
-      <View style={styles.sourceGrid}>
-        <SourceButton icon="scan-outline" label="Scan paper" onPress={() => void scanPaper()} />
-        <SourceButton icon="folder-open-outline" label="Choose file" onPress={() => void chooseFile()} />
-      </View>
-
-      {selectedFile ? (
-        <View style={styles.selectedFile}>
-          <View style={styles.fileIcon}>
-            <Ionicons
-              name={selectedFile.mimeType.startsWith("image/") ? "image-outline" : "document-text-outline"}
-              size={24}
-              color={colors.forest}
-            />
-          </View>
-          <View style={styles.selectedCopy}>
-            <Text style={styles.selectedLabel}>READY TO ENCRYPT</Text>
-            <Text style={styles.selectedName} numberOfLines={1}>
-              {selectedFile.originalName}
-            </Text>
-          </View>
-          <Ionicons name="checkmark-circle" size={22} color={colors.forest} />
+      <View style={styles.section}>
+        <SectionHeading title="Choose a source" detail="PDF or image, up to 25 MB" />
+        <View style={styles.sourceGrid}>
+          <SourceButton
+            icon="scan"
+            label="Scan paper"
+            accessibilityHint="Opens the camera document scanner"
+            loading={isImporting === "scan"}
+            disabled={Boolean(isImporting) || isSaving}
+            onPress={() => void scanPaper()}
+          />
+          <SourceButton
+            icon="folder-open"
+            label="Choose file"
+            accessibilityHint="Opens the system file picker for a PDF or image"
+            loading={isImporting === "file"}
+            disabled={Boolean(isImporting) || isSaving}
+            onPress={() => void chooseFile()}
+          />
         </View>
-      ) : null}
 
-      <View style={styles.sectionRule} />
-      <Text style={styles.eyebrow}>02 / INDEX</Text>
-
-      <Text style={styles.label}>Document name</Text>
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        placeholder="e.g. Passport"
-        placeholderTextColor={colors.inkMuted}
-        style={styles.input}
-        autoCapitalize="sentences"
-        maxLength={80}
-      />
-
-      <Text style={styles.label}>Type</Text>
-      <View style={styles.kindGrid}>
-        {DOCUMENT_KIND_DEFINITIONS.map((item) => (
-          <Pressable
-            key={item.value}
-            onPress={() => {
-              setKind(item.value);
-              void Haptics.selectionAsync();
-            }}
-            style={[styles.kindButton, kind === item.value ? styles.kindButtonActive : null]}
+        {selectedFile ? (
+          <Surface
+            accessible
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`${selectedFile.originalName}, ready`}
+            elevation={0}
+            style={styles.selectedFile}
           >
-            <Ionicons
-              name={item.icon as keyof typeof Ionicons.glyphMap}
-              size={20}
-              color={kind === item.value ? colors.signal : colors.forest}
-            />
-            <Text style={[styles.kindLabel, kind === item.value ? styles.kindLabelActive : null]}>
-              {item.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Expiry date</Text>
-      <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
-        <Ionicons name="calendar-clear-outline" size={20} color={colors.forest} />
-        <Text style={[styles.dateText, !expiry ? styles.placeholder : null]}>
-          {expiry ? formatDate(expiry.toISOString().slice(0, 10)) : "No expiry date"}
-        </Text>
-        {expiry ? (
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              setExpiry(null);
-            }}
-            hitSlop={8}
-          >
-            <Ionicons name="close-circle" size={20} color={colors.inkMuted} />
-          </Pressable>
+            <View style={styles.fileIcon}>
+              <AppIcon
+                name={selectedFile.mimeType.startsWith("image/") ? "image" : "document"}
+                size={24}
+                color={colors.forestDark}
+              />
+            </View>
+            <View style={styles.selectedCopy}>
+              <Text variant="titleSmall" style={styles.selectedName} numberOfLines={1}>
+                {selectedFile.originalName}
+              </Text>
+            </View>
+            <AppIcon name="check-circle" size={24} color={colors.forest} />
+          </Surface>
         ) : null}
-      </Pressable>
-
-      {showDatePicker ? (
-        <DateTimePicker
-          value={expiry ?? new Date()}
-          mode="date"
-          minimumDate={new Date()}
-          onChange={(_, value) => {
-            setShowDatePicker(false);
-            if (value) setExpiry(value);
-          }}
-        />
-      ) : null}
-
-      <Text style={styles.label}>Private note</Text>
-      <TextInput
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Optional context, reference number, or reminder"
-        placeholderTextColor={colors.inkMuted}
-        style={[styles.input, styles.notes]}
-        multiline
-        textAlignVertical="top"
-        maxLength={500}
-      />
-
-      <View style={styles.securityNote}>
-        <Ionicons name="lock-closed-outline" size={19} color={colors.forest} />
-        <Text style={styles.securityCopy}>
-          AES-256 encrypted. The original is never uploaded to Pocketproof or a document server.
-        </Text>
       </View>
 
-      <ActionButton onPress={() => void save()} disabled={isSaving}>
-        {isSaving ? "Encrypting…" : "Secure in vault"}
-      </ActionButton>
+      <View style={styles.section}>
+        <SectionHeading title="Details" />
+        <MaterialCard style={styles.formCard}>
+          <TextInput
+            mode="outlined"
+            label="Document name"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="e.g. Passport"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            autoCapitalize="sentences"
+            maxLength={80}
+            returnKeyType="next"
+            disabled={isSaving}
+          />
+
+          <View style={styles.fieldGroup}>
+            <Text variant="labelLarge" style={styles.fieldLabel}>
+              Type
+            </Text>
+            <View style={styles.kindGrid} accessibilityRole="radiogroup">
+              {DOCUMENT_KIND_DEFINITIONS.map((item) => {
+                const selected = kind === item.value;
+                return (
+                  <View
+                    key={item.value}
+                    style={[styles.kindCell, wide ? styles.kindCellWide : null]}
+                  >
+                    <Chip
+                      icon={appIconSource(item.icon)}
+                      selected={selected}
+                      showSelectedCheck={false}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected, disabled: isSaving }}
+                      disabled={isSaving}
+                      onPress={() => {
+                        setKind(item.value);
+                        void Haptics.selectionAsync();
+                      }}
+                      style={[styles.kindChip, selected ? styles.kindChipSelected : null]}
+                      textStyle={[
+                        styles.kindChipText,
+                        selected ? styles.kindChipTextSelected : null,
+                      ]}
+                    >
+                      {item.label}
+                    </Chip>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text variant="labelLarge" style={styles.fieldLabel}>
+              Expiry date
+            </Text>
+            <View style={styles.dateRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  expiry
+                    ? `Expiry date, ${formatDate(expiry.toISOString().slice(0, 10))}`
+                    : "Expiry date, no expiry date set"
+                }
+                accessibilityHint="Opens the date picker"
+                disabled={isSaving}
+                onPress={() => setShowDatePicker(true)}
+                style={({ pressed }) => [
+                  styles.dateInput,
+                  pressed && !isSaving ? styles.pressed : null,
+                ]}
+              >
+                <AppIcon name="calendar" size={21} color={colors.forest} />
+                <Text
+                  variant="bodyLarge"
+                  style={[styles.dateText, !expiry ? styles.placeholder : null]}
+                >
+                  {expiry ? formatDate(expiry.toISOString().slice(0, 10)) : "No expiry date"}
+                </Text>
+                <AppIcon name="chevron-down" size={18} color={colors.inkMuted} />
+              </Pressable>
+              {expiry ? (
+                <IconButton
+                  icon={appIconSource("close")}
+                  mode="contained-tonal"
+                  accessibilityLabel="Clear expiry date"
+                  disabled={isSaving}
+                  onPress={() => setExpiry(null)}
+                  style={styles.clearDate}
+                />
+              ) : null}
+            </View>
+          </View>
+
+          {showDatePicker ? (
+            <DateTimePicker
+              value={expiry ?? new Date()}
+              mode="date"
+              minimumDate={new Date()}
+              onChange={(_, value) => {
+                setShowDatePicker(false);
+                if (value) setExpiry(value);
+              }}
+            />
+          ) : null}
+
+          <TextInput
+            mode="outlined"
+            label="Private note (optional)"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Reference number, context, or reminder"
+            style={[styles.input, styles.notes]}
+            outlineStyle={styles.inputOutline}
+            multiline
+            textAlignVertical="top"
+            maxLength={500}
+            disabled={isSaving}
+          />
+        </MaterialCard>
+      </View>
+
+      <HelperText type="info" visible style={styles.accessLabel}>
+        {accessLabel}
+      </HelperText>
+      <Button
+        mode="contained"
+        icon={appIconSource("document-security")}
+        loading={isSaving}
+        disabled={isSaving || Boolean(isImporting) || isPurchasesLoading}
+        accessibilityLabel={isSaving ? "Encrypting document" : "Secure document in vault"}
+        accessibilityState={{
+          busy: isSaving || isPurchasesLoading,
+          disabled: isSaving || Boolean(isImporting) || isPurchasesLoading,
+        }}
+        onPress={() => void save()}
+        contentStyle={styles.saveButtonContent}
+        labelStyle={styles.saveButtonLabel}
+        style={styles.saveButton}
+      >
+        {isSaving ? "Saving..." : "Save to vault"}
+      </Button>
     </Screen>
   );
 }
@@ -253,142 +445,123 @@ export default function AddDocumentScreen() {
 function SourceButton({
   icon,
   label,
+  accessibilityHint,
+  loading,
+  disabled,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: AppIconName;
   label: string;
+  accessibilityHint: string;
+  loading: boolean;
+  disabled: boolean;
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.sourceButton, pressed && styles.pressed]}>
-      <Ionicons name={icon} size={27} color={colors.forest} />
-      <Text style={styles.sourceLabel}>{label}</Text>
-    </Pressable>
+    <Button
+      mode="outlined"
+      icon={appIconSource(icon)}
+      loading={loading}
+      disabled={disabled}
+      accessibilityLabel={loading ? `${label}, loading` : label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ busy: loading, disabled }}
+      onPress={onPress}
+      contentStyle={styles.sourceButtonContent}
+      labelStyle={styles.sourceButtonLabel}
+      style={styles.sourceButton}
+    >
+      {loading ? "Loading..." : label}
+    </Button>
   );
 }
 
 const styles = StyleSheet.create({
-  eyebrow: {
-    color: colors.rust,
-    fontFamily: typography.label,
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 1.7,
-    marginBottom: 8,
+  screenContent: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
   },
-  heading: {
-    color: colors.ink,
-    fontFamily: typography.display,
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "700",
-    letterSpacing: -0.8,
-    marginBottom: 22,
-  },
-  sourceGrid: { flexDirection: "row", gap: 12 },
+  screenContentWide: { maxWidth: 920 },
+  section: { marginBottom: spacing.xxxl },
+  sourceGrid: { flexDirection: "row", gap: spacing.md },
   sourceButton: {
     flex: 1,
-    minHeight: 108,
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    padding: 16,
+    borderRadius: radii.lg,
+    borderColor: colors.rule,
     backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.ink,
   },
-  sourceLabel: {
-    color: colors.ink,
-    fontFamily: typography.label,
-    fontWeight: "800",
+  sourceButtonContent: {
+    minHeight: 88,
+    flexDirection: "column",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+  },
+  sourceButtonLabel: {
+    color: colors.forestDark,
+    fontFamily: typography.strong,
     fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginTop: spacing.xs,
   },
-  pressed: { transform: [{ translateY: 2 }], opacity: 0.85 },
+  pressed: { opacity: 0.72 },
   selectedFile: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 13,
-    marginTop: 12,
+    gap: spacing.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
     backgroundColor: colors.forestSoft,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.forest,
+    borderColor: colors.signal,
   },
   fileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.card,
+    backgroundColor: colors.white,
   },
   selectedCopy: { flex: 1 },
-  selectedLabel: {
-    color: colors.forest,
-    fontFamily: typography.label,
-    fontWeight: "800",
-    fontSize: 9,
-    letterSpacing: 1.2,
+  selectedName: { color: colors.ink, fontFamily: typography.strong, marginTop: 2 },
+  formCard: { padding: spacing.lg, gap: spacing.xxl },
+  input: { backgroundColor: colors.card },
+  inputOutline: { borderRadius: radii.md },
+  notes: { minHeight: 120 },
+  fieldGroup: { gap: spacing.sm },
+  fieldLabel: { color: colors.ink, fontFamily: typography.strong },
+  kindGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
+  kindCell: { width: "50%", padding: 4 },
+  kindCellWide: { width: "25%" },
+  kindChip: {
+    width: "100%",
+    minHeight: 46,
+    justifyContent: "center",
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
   },
-  selectedName: { color: colors.ink, fontWeight: "700", fontSize: 13, marginTop: 3 },
-  sectionRule: { height: 1, backgroundColor: colors.rule, marginVertical: 30 },
-  label: {
-    color: colors.ink,
-    fontFamily: typography.label,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  input: {
-    minHeight: 52,
-    color: colors.ink,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.rule,
-    paddingHorizontal: 15,
-    fontFamily: typography.body,
-    fontSize: 15,
-  },
-  notes: { minHeight: 105, paddingTop: 14 },
-  kindGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  kindButton: {
-    width: "48.5%",
-    minHeight: 53,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    paddingHorizontal: 13,
-    borderWidth: 1,
-    borderColor: colors.rule,
-    backgroundColor: colors.card,
-  },
-  kindButtonActive: { backgroundColor: colors.forest, borderColor: colors.forest },
-  kindLabel: { color: colors.ink, fontSize: 12, fontWeight: "700" },
-  kindLabelActive: { color: colors.white },
+  kindChipSelected: { backgroundColor: colors.signal },
+  kindChipText: { color: colors.inkMuted, fontFamily: typography.label, fontSize: 12 },
+  kindChipTextSelected: { color: colors.forestDark },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dateInput: {
-    minHeight: 52,
+    minHeight: 56,
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.card,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.rule,
-    paddingHorizontal: 15,
+    borderColor: colors.inkMuted,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
   },
-  dateText: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: "600" },
-  placeholder: { color: colors.inkMuted, fontWeight: "400" },
-  securityNote: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginVertical: 22,
-    padding: 14,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.forest,
-    backgroundColor: colors.forestSoft,
-  },
-  securityCopy: { flex: 1, color: colors.forest, fontSize: 12, lineHeight: 18 },
+  dateText: { flex: 1, color: colors.ink, fontFamily: typography.medium },
+  placeholder: { color: colors.inkMuted, fontFamily: typography.body },
+  clearDate: { margin: 0 },
+  accessLabel: { color: colors.inkMuted, marginVertical: spacing.sm },
+  saveButton: { borderRadius: radii.full },
+  saveButtonContent: { minHeight: 58, paddingHorizontal: spacing.lg },
+  saveButtonLabel: { fontFamily: typography.strong, fontSize: 15 },
 });

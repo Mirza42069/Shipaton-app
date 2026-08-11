@@ -5,11 +5,12 @@ import {
   type PropsWithChildren,
   use,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
-const BIOMETRIC_SETTING_KEY = "pocketproof.biometric-lock.v1";
+const BIOMETRIC_SETTING_KEY = "berkas.biometric-lock.v1";
 
 type SecurityContextValue = {
   biometricEnabled: boolean;
@@ -17,6 +18,7 @@ type SecurityContextValue = {
   isLoading: boolean;
   setBiometricEnabled: (enabled: boolean) => Promise<boolean>;
   unlock: () => Promise<boolean>;
+  runWithAutoLockPaused: <T>(action: () => Promise<T>) => Promise<T>;
 };
 
 const SecurityContext = createContext<SecurityContextValue | null>(null);
@@ -25,10 +27,11 @@ export function SecurityProvider({ children }: PropsWithChildren) {
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const autoLockPaused = useRef(false);
 
   async function authenticate() {
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock Pocketproof",
+      promptMessage: "Unlock Berkas",
       promptSubtitle: "Your document vault is private",
       cancelLabel: "Keep locked",
       disableDeviceFallback: false,
@@ -57,7 +60,7 @@ export function SecurityProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     function handleAppState(state: AppStateStatus) {
-      if (state !== "active" && biometricEnabled) setIsLocked(true);
+      if (state !== "active" && biometricEnabled && !autoLockPaused.current) setIsLocked(true);
       if (state === "active" && biometricEnabled && isLocked) void authenticate();
     }
 
@@ -81,6 +84,18 @@ export function SecurityProvider({ children }: PropsWithChildren) {
     return true;
   }
 
+  async function runWithAutoLockPaused<T>(action: () => Promise<T>) {
+    autoLockPaused.current = true;
+    try {
+      return await action();
+    } finally {
+      setTimeout(() => {
+        autoLockPaused.current = false;
+        if (biometricEnabled && AppState.currentState !== "active") setIsLocked(true);
+      }, 30_000);
+    }
+  }
+
   return (
     <SecurityContext
       value={{
@@ -89,6 +104,7 @@ export function SecurityProvider({ children }: PropsWithChildren) {
         isLoading,
         setBiometricEnabled,
         unlock: authenticate,
+        runWithAutoLockPaused,
       }}
     >
       {children}

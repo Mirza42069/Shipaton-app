@@ -1,9 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text as PaperText } from "react-native-paper";
 
+import { AppIcon } from "@/components/app-icon";
+import { MaterialCard } from "@/components/screen";
 import { expiryLabel, formatFileSize } from "@/lib/date";
-import { colors, typography } from "@/lib/theme";
+import { colors, radii, spacing, typography } from "@/lib/theme";
 import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument } from "@/types/document";
 
 export function DocumentCard({ document, compact = false }: { document: VaultDocument; compact?: boolean }) {
@@ -12,96 +14,90 @@ export function DocumentCard({ document, compact = false }: { document: VaultDoc
   const expiry = expiryLabel(document.expiresAt);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${document.title}`}
-      onPress={() => router.push({ pathname: "/document/[id]", params: { id: document.id } })}
-      style={({ pressed }) => [styles.card, compact ? styles.cardCompact : null, pressed && styles.cardPressed]}
-    >
-      <View style={styles.folderTab} />
-      <View style={styles.topRow}>
-        <View style={styles.kindMark}>
-          <Ionicons
-            name={kind.icon as keyof typeof Ionicons.glyphMap}
-            size={18}
-            color={colors.forest}
-          />
+    <MaterialCard style={[styles.card, compact ? styles.cardCompact : null]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${document.title}, ${kind.label}, ${expiry.label}${document.isFavorite ? ", favorite" : ""}`}
+        accessibilityHint="Opens document details"
+        android_ripple={{ color: colors.forestSoft }}
+        onPress={() => router.push({ pathname: "/document/[id]", params: { id: document.id } })}
+        style={({ pressed }) => [styles.cardContent, pressed && styles.cardPressed]}
+      >
+        <View style={styles.topRow}>
+          <View style={styles.kindMark}>
+            <AppIcon name={kind.icon} size={20} color={colors.forestDark} />
+          </View>
+          <PaperText variant="labelMedium" style={styles.kind}>{kind.shortLabel}</PaperText>
+          {document.isFavorite ? (
+            <View style={styles.favoriteMark}>
+              <AppIcon name="bookmark" size={15} color={colors.forest} />
+            </View>
+          ) : null}
         </View>
-        <Text style={styles.kind}>{kind.shortLabel}</Text>
-        {document.isFavorite ? (
-          <Ionicons name="bookmark" size={16} color={colors.rust} style={styles.favorite} />
-        ) : null}
-      </View>
 
-      <Text style={styles.documentTitle} numberOfLines={2}>
-        {document.title}
-      </Text>
-      <Text style={styles.fileMeta} numberOfLines={1}>
-        {document.fileExtension.replace(".", "").toUpperCase()} · {formatFileSize(document.fileSize)}
-      </Text>
+        <PaperText variant="titleLarge" style={styles.documentTitle} numberOfLines={2}>
+          {document.title}
+        </PaperText>
+        <PaperText variant="bodySmall" style={styles.fileMeta} numberOfLines={1}>
+          {document.fileExtension.replace(".", "").toUpperCase()} · {formatFileSize(document.fileSize)}
+        </PaperText>
 
-      <View style={styles.rule} />
-      <View style={styles.expiryRow}>
-        <View
-          style={[
-            styles.statusDot,
-            expiry.tone === "danger" ? styles.statusDanger : null,
-            expiry.tone === "warning" ? styles.statusWarning : null,
-          ]}
-        />
-        <Text style={[styles.expiry, expiry.tone === "danger" ? styles.expiryDanger : null]}>
-          {expiry.label}
-        </Text>
-      </View>
-    </Pressable>
+        <View style={styles.footer}>
+          <View
+            style={[
+              styles.expiryPill,
+              expiry.tone === "danger" ? styles.expiryPillDanger : null,
+              expiry.tone === "warning" ? styles.expiryPillWarning : null,
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                expiry.tone === "danger" ? styles.statusDanger : null,
+                expiry.tone === "warning" ? styles.statusWarning : null,
+              ]}
+            />
+            <PaperText
+              variant="labelSmall"
+              style={[
+                styles.expiry,
+                expiry.tone === "danger" ? styles.expiryDanger : null,
+                expiry.tone === "warning" ? styles.expiryWarning : null,
+              ]}
+            >
+              {expiry.label}
+            </PaperText>
+          </View>
+          <AppIcon name="chevron-right" size={19} color={colors.inkMuted} />
+        </View>
+      </Pressable>
+    </MaterialCard>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     minHeight: 188,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.rule,
-    borderRadius: 3,
-    padding: 18,
-    paddingTop: 22,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 2,
-    overflow: "visible",
+    borderRadius: radii.lg,
   },
   cardCompact: {
-    minHeight: 168,
+    minHeight: 174,
+  },
+  cardContent: {
+    flex: 1,
+    padding: spacing.lg,
   },
   cardPressed: {
-    transform: [{ translateY: 2 }],
-    shadowOpacity: 0.03,
-  },
-  folderTab: {
-    position: "absolute",
-    width: 68,
-    height: 9,
-    left: 16,
-    top: -8,
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: colors.rule,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    opacity: 0.78,
   },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   kindMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.forestSoft,
@@ -110,59 +106,70 @@ const styles = StyleSheet.create({
     marginLeft: 9,
     color: colors.forest,
     fontFamily: typography.label,
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 1.4,
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
-  favorite: {
+  favoriteMark: {
     marginLeft: "auto",
+    width: 32,
+    height: 32,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
   documentTitle: {
-    marginTop: 17,
+    marginTop: spacing.lg,
     color: colors.ink,
-    fontFamily: typography.display,
-    fontSize: 23,
-    lineHeight: 27,
-    fontWeight: "700",
-    letterSpacing: -0.4,
+    fontFamily: typography.strong,
+    lineHeight: 28,
+    letterSpacing: -0.3,
   },
   fileMeta: {
-    marginTop: 5,
+    marginTop: spacing.xs,
     color: colors.inkMuted,
-    fontFamily: typography.label,
-    fontSize: 11,
-    letterSpacing: 0.8,
+    fontFamily: typography.medium,
+    letterSpacing: 0.3,
   },
-  rule: {
-    height: 1,
-    backgroundColor: colors.rule,
-    marginTop: "auto",
-    marginBottom: 11,
-  },
-  expiryRow: {
+  footer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "auto",
+    paddingTop: spacing.lg,
   },
+  expiryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radii.full,
+    backgroundColor: colors.forestSoft,
+  },
+  expiryPillDanger: { backgroundColor: colors.rustSoft },
+  expiryPillWarning: { backgroundColor: colors.warningSoft },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: spacing.sm,
     backgroundColor: colors.forest,
   },
   statusDanger: {
     backgroundColor: colors.rust,
   },
   statusWarning: {
-    backgroundColor: "#C4922B",
+    backgroundColor: colors.warning,
   },
   expiry: {
-    color: colors.inkMuted,
+    color: colors.forestDark,
     fontFamily: typography.label,
-    fontSize: 12,
-    fontWeight: "700",
   },
   expiryDanger: {
     color: colors.rust,
+  },
+  expiryWarning: {
+    color: colors.warning,
   },
 });

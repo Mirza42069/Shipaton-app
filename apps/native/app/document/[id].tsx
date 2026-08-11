@@ -1,51 +1,99 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, StyleSheet, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Button, IconButton, Surface, Text } from "react-native-paper";
 
-import { ActionButton, Screen } from "@/components/screen";
+import { AppIcon, type AppIconName, appIconSource } from "@/components/app-icon";
+import { MaterialCard, PageHeader, Screen } from "@/components/screen";
+import { useSecurity } from "@/contexts/security-context";
 import { useVault } from "@/contexts/vault-context";
 import { expiryLabel, formatDate, formatFileSize } from "@/lib/date";
-import { colors, typography } from "@/lib/theme";
-import { decryptForPreview } from "@/lib/vault-crypto";
+import { colors, radii, spacing, typography } from "@/lib/theme";
+import { decryptForPreview, deletePreviewFile } from "@/lib/vault-crypto";
 import { DOCUMENT_KIND_DEFINITIONS } from "@/types/document";
 
 export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { documents, deleteDocument, toggleFavorite } = useVault();
+  const { documents, isLoading, deleteDocument, toggleFavorite } = useVault();
+  const { runWithAutoLockPaused } = useSecurity();
   const document = documents.find((item) => item.id === id);
+  const encryptedUri = document?.encryptedUri;
+  const documentId = document?.id;
+  const fileExtension = document?.fileExtension;
+  const mimeType = document?.mimeType;
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+  const [isFavoriteUpdating, setIsFavoriteUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const wide = width >= 760;
 
   useEffect(() => {
-    if (!document || !document.mimeType.startsWith("image/")) return;
+    setPreviewUri(null);
+    setPreviewError(false);
+    setIsPreviewLoading(false);
+    if (!encryptedUri || !documentId || !fileExtension || !mimeType?.startsWith("image/")) return;
+
     let active = true;
-    void decryptForPreview(document.encryptedUri, document.id, document.fileExtension)
+    setIsPreviewLoading(true);
+    void decryptForPreview(encryptedUri, documentId, fileExtension)
       .then((file) => {
-        if (active) setPreviewUri(file.uri);
+        if (active) {
+          setPreviewUri(file.uri);
+        } else {
+          deletePreviewFile(documentId, fileExtension);
+        }
       })
       .catch(() => {
         if (active) setPreviewError(true);
+      })
+      .finally(() => {
+        if (active) setIsPreviewLoading(false);
       });
+
     return () => {
       active = false;
+      deletePreviewFile(documentId, fileExtension);
     };
-  }, [document]);
+  }, [documentId, encryptedUri, fileExtension, mimeType]);
+
+  if (isLoading) {
+    return (
+      <Screen scroll={false} style={styles.centeredScreen}>
+        <ActivityIndicator size="large" accessibilityLabel="Loading document" />
+      </Screen>
+    );
+  }
 
   if (!document) {
     return (
-      <Screen>
-        <View style={styles.missing}>
-          <Ionicons name="document-outline" size={42} color={colors.inkMuted} />
-          <Text style={styles.missingTitle}>Document not found</Text>
-          <ActionButton onPress={() => router.replace("/(tabs)/vault")}>Back to vault</ActionButton>
-        </View>
+      <Screen scroll={false} style={styles.centeredScreen}>
+        <MaterialCard style={styles.missingCard}>
+          <View style={styles.missingIcon}>
+            <AppIcon name="document" size={34} color={colors.forestDark} />
+          </View>
+          <Text variant="headlineMedium" accessibilityRole="header" style={styles.missingTitle}>
+            Document not found
+          </Text>
+          <Text variant="bodyLarge" style={styles.missingCopy}>
+            It may have been deleted.
+          </Text>
+          <Button
+            mode="contained"
+            icon={appIconSource("back")}
+            onPress={() => router.replace("/(tabs)/vault")}
+            contentStyle={styles.buttonContent}
+            style={styles.primaryButton}
+          >
+            Back to vault
+          </Button>
+        </MaterialCard>
       </Screen>
     );
   }
@@ -53,38 +101,76 @@ export default function DocumentDetailScreen() {
   const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
   const expiry = expiryLabel(document.expiresAt);
   const currentDocument = document;
+  const actionsBusy = isOpening || isDeleting || isFavoriteUpdating || isPreviewLoading;
 
   async function openOrShare() {
+    if (actionsBusy) return;
+    setIsOpening(true);
+    let temporaryCreated = false;
     try {
       const preview = await decryptForPreview(
         currentDocument.encryptedUri,
         currentDocument.id,
         currentDocument.fileExtension,
       );
+      temporaryCreated = true;
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert("Sharing unavailable", "No compatible viewer is available on this device.");
+        Alert.alert("Can't open", "No compatible viewer is available.");
         return;
       }
-      await Sharing.shareAsync(preview.uri, {
-        mimeType: currentDocument.mimeType,
-        dialogTitle: `Open ${currentDocument.title}`,
-      });
+      await runWithAutoLockPaused(() =>
+        Sharing.shareAsync(preview.uri, {
+          mimeType: currentDocument.mimeType,
+          dialogTitle: `Open ${currentDocument.title}`,
+        }),
+      );
     } catch (error) {
-      Alert.alert("Could not open document", error instanceof Error ? error.message : "Decryption failed.");
+      Alert.alert("Couldn't open", error instanceof Error ? error.message : "Decryption failed.");
+    } finally {
+      if (temporaryCreated && !currentDocument.mimeType.startsWith("image/")) {
+        deletePreviewFile(currentDocument.id, currentDocument.fileExtension);
+      }
+      setIsOpening(false);
+    }
+  }
+
+  async function updateFavorite() {
+    if (isFavoriteUpdating) return;
+    setIsFavoriteUpdating(true);
+    try {
+      await toggleFavorite(currentDocument.id, currentDocument.isFavorite);
+      void Haptics.selectionAsync();
+    } catch (error) {
+      Alert.alert(
+        "Couldn't update favorite",
+        error instanceof Error ? error.message : "Update failed.",
+      );
+    } finally {
+      setIsFavoriteUpdating(false);
     }
   }
 
   function confirmDelete() {
+    if (actionsBusy) return;
     Alert.alert(
       "Delete this document?",
-      "The encrypted file and its reminder will be permanently removed from this phone.",
+      "This permanently removes the file and reminder from this phone.",
       [
         { text: "Keep it", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            void deleteDocument(currentDocument.id).then(() => router.replace("/(tabs)/vault"));
+            setIsDeleting(true);
+            void deleteDocument(currentDocument.id)
+              .then(() => router.replace("/(tabs)/vault"))
+              .catch((error: unknown) => {
+                Alert.alert(
+                  "Couldn't delete",
+                  error instanceof Error ? error.message : "Delete failed.",
+                );
+                setIsDeleting(false);
+              });
           },
         },
       ],
@@ -92,70 +178,143 @@ export default function DocumentDetailScreen() {
   }
 
   return (
-    <Screen>
+    <Screen style={[styles.screenContent, wide ? styles.screenContentWide : null]}>
       <View style={[styles.layout, wide ? styles.layoutWide : null]}>
-        <View style={[styles.preview, wide ? styles.previewWide : null]}>
+        <MaterialCard
+          style={[
+            styles.preview,
+            wide ? styles.previewWide : null,
+            !wide && width < 390 ? styles.previewCompact : null,
+          ]}
+        >
           {previewUri ? (
-            <Image source={{ uri: previewUri }} style={styles.image} contentFit="contain" />
+            <Image
+              source={{ uri: previewUri }}
+              style={styles.image}
+              contentFit="contain"
+              accessible
+              accessibilityRole="image"
+              accessibilityLabel={`Preview of ${document.title}`}
+            />
+          ) : isPreviewLoading ? (
+            <View style={styles.filePlaceholder}>
+              <ActivityIndicator
+                size="large"
+                color={colors.forest}
+                accessibilityLabel="Loading preview"
+              />
+            </View>
           ) : (
             <View style={styles.filePlaceholder}>
-              <View style={styles.fileStamp}>
-                <Ionicons
-                  name={previewError ? "alert-circle-outline" : "document-lock-outline"}
-                  size={40}
-                  color={colors.signal}
+              <View style={[styles.fileStamp, previewError ? styles.fileStampError : null]}>
+                <AppIcon
+                  name={previewError ? "alert" : "document-security"}
+                  size={34}
+                  color={previewError ? colors.rust : colors.forestDark}
                 />
               </View>
-              <Text style={styles.fileType}>{document.fileExtension.replace(".", "").toUpperCase()}</Text>
-              <Text style={styles.fileState}>{previewError ? "Preview unavailable" : "Encrypted at rest"}</Text>
+              <Text variant="displaySmall" style={styles.fileType}>
+                {document.fileExtension.replace(".", "").toUpperCase()}
+              </Text>
+              {previewError ? (
+                <Text variant="bodyMedium" style={styles.previewStatus}>
+                  Preview unavailable
+                </Text>
+              ) : null}
             </View>
           )}
-        </View>
+        </MaterialCard>
 
         <View style={[styles.details, wide ? styles.detailsWide : null]}>
-          <View style={styles.kindRow}>
-            <Text style={styles.kind}>{kind.shortLabel}</Text>
-            <Pressable
-              accessibilityLabel={document.isFavorite ? "Remove favorite" : "Add favorite"}
-              onPress={() => {
-                void toggleFavorite(document.id, document.isFavorite);
-                void Haptics.selectionAsync();
-              }}
-              style={styles.favoriteButton}
-            >
-              <Ionicons
-                name={document.isFavorite ? "bookmark" : "bookmark-outline"}
-                size={23}
-                color={document.isFavorite ? colors.rust : colors.ink}
+          <PageHeader
+            eyebrow={kind.label.toUpperCase()}
+            title={document.title}
+            detail={document.originalName}
+            action={
+              <IconButton
+                icon={appIconSource("bookmark")}
+                mode="contained-tonal"
+                selected={document.isFavorite}
+                loading={isFavoriteUpdating}
+                disabled={isFavoriteUpdating || actionsBusy}
+                accessibilityLabel={document.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                accessibilityState={{
+                  selected: document.isFavorite,
+                  busy: isFavoriteUpdating,
+                  disabled: isFavoriteUpdating || actionsBusy,
+                }}
+                onPress={() => void updateFavorite()}
+                style={styles.favoriteButton}
               />
-            </Pressable>
-          </View>
-          <Text style={styles.title}>{document.title}</Text>
-          <Text style={styles.originalName} numberOfLines={2}>{document.originalName}</Text>
+            }
+          />
 
           <View style={styles.facts}>
-            <Fact label="SIZE" value={formatFileSize(document.fileSize)} />
-            <Fact label="ADDED" value={formatDate(document.createdAt.slice(0, 10))} />
-            <Fact label="EXPIRY" value={expiry.label} danger={expiry.tone === "danger"} />
+            <Fact icon="database" label="Size" value={formatFileSize(document.fileSize)} />
+            <Fact
+              icon="calendar"
+              label="Added"
+              value={formatDate(document.createdAt.slice(0, 10))}
+            />
+            <Fact
+              icon="clock"
+              label="Expiry"
+              value={expiry.label}
+              tone={expiry.tone}
+            />
           </View>
 
           {document.notes ? (
-            <View style={styles.note}>
-              <Text style={styles.noteLabel}>PRIVATE NOTE</Text>
-              <Text style={styles.noteText}>{document.notes}</Text>
-            </View>
+            <Surface elevation={0} style={styles.note}>
+              <View style={styles.noteHeading}>
+                <AppIcon name="lock" size={16} color={colors.forest} />
+                <Text variant="labelMedium" style={styles.noteLabel}>
+                  Private note
+                </Text>
+              </View>
+              <Text variant="bodyMedium" style={styles.noteText}>
+                {document.notes}
+              </Text>
+            </Surface>
           ) : null}
 
           <View style={styles.actions}>
-            <ActionButton onPress={() => void openOrShare()}>
-              {document.mimeType === "application/pdf" ? "Open PDF" : "Share a copy"}
-            </ActionButton>
-            <ActionButton variant="secondary" onPress={confirmDelete}>Delete from vault</ActionButton>
-          </View>
-
-          <View style={styles.encryptionFooter}>
-            <Ionicons name="shield-checkmark" size={18} color={colors.forest} />
-            <Text style={styles.encryptionText}>AES-256-GCM · KEY HELD BY ANDROID KEYSTORE</Text>
+            <Button
+              mode="contained"
+              icon={appIconSource(document.mimeType === "application/pdf" ? "document" : "share")}
+              loading={isOpening}
+              disabled={actionsBusy}
+              accessibilityLabel={
+                document.mimeType === "application/pdf"
+                  ? "Open PDF"
+                  : `Share a copy of ${document.title}`
+              }
+              accessibilityState={{ busy: isOpening, disabled: actionsBusy }}
+              onPress={() => void openOrShare()}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+              style={styles.primaryButton}
+            >
+              {isOpening
+                ? "Preparing..."
+                : document.mimeType === "application/pdf"
+                  ? "Open PDF"
+                  : "Share"}
+            </Button>
+            <Button
+              mode="outlined"
+              icon={appIconSource("delete")}
+              loading={isDeleting}
+              disabled={actionsBusy}
+              textColor={colors.rust}
+              accessibilityState={{ busy: isDeleting, disabled: actionsBusy }}
+              onPress={confirmDelete}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+              style={styles.deleteButton}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
           </View>
         </View>
       </View>
@@ -163,107 +322,117 @@ export default function DocumentDetailScreen() {
   );
 }
 
-function Fact({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+function Fact({
+  icon,
+  label,
+  value,
+  tone = "neutral",
+}: {
+  icon: AppIconName;
+  label: string;
+  value: string;
+  tone?: "neutral" | "warning" | "danger";
+}) {
   return (
-    <View style={styles.fact}>
-      <Text style={styles.factLabel}>{label}</Text>
-      <Text style={[styles.factValue, danger ? styles.danger : null]}>{value}</Text>
-    </View>
+    <Surface elevation={0} style={styles.fact}>
+      <AppIcon
+        name={icon}
+        size={18}
+        color={tone === "danger" ? colors.rust : tone === "warning" ? colors.warning : colors.forest}
+      />
+      <Text variant="labelSmall" style={styles.factLabel}>
+        {label}
+      </Text>
+      <Text
+        variant="titleSmall"
+        style={[
+          styles.factValue,
+          tone === "danger" ? styles.danger : null,
+          tone === "warning" ? styles.warning : null,
+        ]}
+      >
+        {value}
+      </Text>
+    </Surface>
   );
 }
 
 const styles = StyleSheet.create({
-  layout: { gap: 24 },
-  layoutWide: { flexDirection: "row", alignItems: "flex-start", gap: 32 },
+  screenContent: { width: "100%", maxWidth: 760, alignSelf: "center" },
+  screenContentWide: { maxWidth: 1180 },
+  centeredScreen: {
+    width: "100%",
+    maxWidth: 620,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+  },
+  layout: { gap: spacing.xxl },
+  layoutWide: { flexDirection: "row", alignItems: "flex-start", gap: spacing.xxxl },
   preview: {
-    height: 340,
-    backgroundColor: colors.forest,
-    borderRadius: 5,
-    overflow: "hidden",
+    height: 400,
+    borderRadius: radii.xl,
+    backgroundColor: colors.paperDeep,
   },
-  previewWide: { flex: 1, minHeight: 540 },
-  image: { width: "100%", height: "100%", backgroundColor: colors.ink },
-  filePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+  previewCompact: { height: 310 },
+  previewWide: { flex: 1.05, height: 620 },
+  image: { width: "100%", height: "100%", backgroundColor: colors.surface },
+  filePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xxl },
   fileStamp: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    borderWidth: 1,
-    borderColor: colors.signal,
+    width: 72,
+    height: 72,
+    borderRadius: radii.full,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.signal,
   },
-  fileType: {
-    color: colors.white,
-    fontFamily: typography.display,
-    fontWeight: "700",
-    fontSize: 42,
-    marginTop: 21,
+  fileStampError: { backgroundColor: colors.rustSoft },
+  fileType: { color: colors.forestDark, fontFamily: typography.extraBold, marginTop: spacing.lg },
+  previewStatus: { color: colors.inkMuted, marginTop: spacing.sm, textAlign: "center" },
+  details: { paddingBottom: spacing.md },
+  detailsWide: { flex: 0.95, paddingTop: spacing.md },
+  favoriteButton: { margin: 0, marginTop: 2 },
+  facts: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  fact: {
+    minWidth: 105,
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
   },
-  fileState: {
-    color: colors.forestSoft,
-    fontFamily: typography.label,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginTop: 5,
-  },
-  details: { paddingBottom: 12 },
-  detailsWide: { flex: 1, paddingTop: 12 },
-  kindRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  kind: {
-    color: colors.rust,
-    fontFamily: typography.label,
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 1.7,
-  },
-  favoriteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.rule,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.card,
-  },
-  title: {
-    color: colors.ink,
-    fontFamily: typography.display,
-    fontWeight: "700",
-    fontSize: 39,
-    lineHeight: 44,
-    letterSpacing: -1.1,
-    marginTop: 8,
-  },
-  originalName: { color: colors.inkMuted, fontSize: 13, marginTop: 8 },
-  facts: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.rule,
-    marginTop: 25,
-    paddingVertical: 17,
-    gap: 24,
-  },
-  fact: { minWidth: 84, flex: 1 },
-  factLabel: {
-    color: colors.inkMuted,
-    fontFamily: typography.label,
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  factValue: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 5 },
+  factLabel: { color: colors.inkMuted, fontFamily: typography.label, marginTop: spacing.sm },
+  factValue: { color: colors.ink, fontFamily: typography.strong, marginTop: 2 },
   danger: { color: colors.rust },
-  note: { backgroundColor: colors.card, borderLeftWidth: 3, borderLeftColor: colors.rust, padding: 17, marginTop: 22 },
-  noteLabel: { color: colors.rust, fontFamily: typography.label, fontSize: 9, fontWeight: "800", letterSpacing: 1.3 },
-  noteText: { color: colors.ink, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  actions: { gap: 10, marginTop: 24 },
-  encryptionFooter: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 22 },
-  encryptionText: { color: colors.forest, fontFamily: typography.label, fontSize: 9, fontWeight: "800", letterSpacing: 0.7 },
-  missing: { flex: 1, gap: 18, alignItems: "flex-start", justifyContent: "center" },
-  missingTitle: { color: colors.ink, fontFamily: typography.display, fontSize: 30, fontWeight: "700" },
+  warning: { color: colors.warning },
+  note: {
+    padding: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.forestSoft,
+    marginTop: spacing.xxl,
+  },
+  noteHeading: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  noteLabel: { color: colors.forestDark, fontFamily: typography.strong },
+  noteText: { color: colors.ink, lineHeight: 22, marginTop: spacing.sm },
+  actions: { gap: spacing.md, marginTop: spacing.xxl },
+  primaryButton: { borderRadius: radii.full },
+  deleteButton: { borderRadius: radii.full, borderColor: colors.rust },
+  buttonContent: { minHeight: 54, paddingHorizontal: spacing.md },
+  buttonLabel: { fontFamily: typography.strong, fontSize: 14 },
+  missingCard: {
+    width: "100%",
+    alignItems: "flex-start",
+    padding: spacing.xxl,
+  },
+  missingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.signal,
+    marginBottom: spacing.xl,
+  },
+  missingTitle: { color: colors.ink, fontFamily: typography.display },
+  missingCopy: { color: colors.inkMuted, lineHeight: 24, marginTop: spacing.sm, marginBottom: spacing.xxl },
 });

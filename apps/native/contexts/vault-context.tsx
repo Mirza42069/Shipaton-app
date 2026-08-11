@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import { usePurchases } from "@/contexts/purchases-context";
 import {
   createDocument,
   getDocument,
@@ -15,7 +16,7 @@ import {
   setFavorite,
 } from "@/lib/document-repository";
 import { cancelExpiryReminder, scheduleExpiryReminder } from "@/lib/notifications";
-import { deleteVaultFile } from "@/lib/vault-crypto";
+import { deletePreviewFile, deleteVaultFile } from "@/lib/vault-crypto";
 import type { NewVaultDocument, VaultDocument } from "@/types/document";
 
 type VaultContextValue = {
@@ -31,6 +32,7 @@ const VaultContext = createContext<VaultContextValue | null>(null);
 
 export function VaultProvider({ children }: PropsWithChildren) {
   const db = useSQLiteContext();
+  const { isPro } = usePurchases();
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,7 +48,7 @@ export function VaultProvider({ children }: PropsWithChildren) {
   async function addDocument(input: NewVaultDocument) {
     const notificationId = await scheduleExpiryReminder(input.title, input.expiresAt);
     try {
-      const id = await createDocument(db, input, notificationId);
+      const id = await createDocument(db, input, notificationId, isPro);
       await refresh();
       return id;
     } catch (error) {
@@ -61,6 +63,7 @@ export function VaultProvider({ children }: PropsWithChildren) {
 
     await removeDocument(db, id);
     deleteVaultFile(document.encryptedUri);
+    deletePreviewFile(document.id, document.fileExtension);
     await cancelExpiryReminder(document.notificationId);
     await refresh();
   }

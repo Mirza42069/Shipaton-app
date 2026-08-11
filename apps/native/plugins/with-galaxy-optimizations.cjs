@@ -1,4 +1,4 @@
-const { withAndroidManifest } = require("@expo/config-plugins");
+const { withAndroidManifest } = require("expo/config-plugins");
 
 module.exports = function withGalaxyOptimizations(config) {
   return withAndroidManifest(config, (androidConfig) => {
@@ -23,13 +23,14 @@ module.exports = function withGalaxyOptimizations(config) {
     }
 
     const features = manifest["uses-feature"] ?? [];
-    if (!features.some((feature) => feature.$["android:name"] === "android.hardware.camera.any")) {
-      features.push({
-        $: {
-          "android:name": "android.hardware.camera.any",
-          "android:required": "false",
-        },
-      });
+    const optionalCameraFeatures = ["android.hardware.camera", "android.hardware.camera.any"];
+    for (const name of optionalCameraFeatures) {
+      const feature = features.find((item) => item.$["android:name"] === name);
+      if (feature) {
+        feature.$["android:required"] = "false";
+      } else {
+        features.push({ $: { "android:name": name, "android:required": "false" } });
+      }
     }
     manifest["uses-feature"] = features;
 

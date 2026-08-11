@@ -1,72 +1,57 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "react-native-paper";
 
-import { ActionButton } from "@/components/screen";
-import { colors, typography } from "@/lib/theme";
+import { AppIcon } from "@/components/app-icon";
+import { MaterialCard } from "@/components/screen";
+import { colors, radii, spacing, typography } from "@/lib/theme";
 
 export function EmptyVault({ compact = false }: { compact?: boolean }) {
-  const router = useRouter();
-
   return (
-    <View style={[styles.empty, compact ? styles.compact : null]}>
-      <View style={styles.stamp}>
-        <Ionicons name="document-lock-outline" size={31} color={colors.forest} />
+    <MaterialCard style={[styles.empty, compact ? styles.compact : null]}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel="Vault empty. Add a document to get started."
+        style={styles.content}
+      >
+        <View style={styles.stamp}>
+          <AppIcon name="document-security" size={32} color={colors.forestDark} />
+        </View>
+        <Text variant="headlineSmall" style={styles.title}>Vault empty</Text>
       </View>
-      <Text style={styles.title}>Nothing important is scattered yet.</Text>
-      <Text style={styles.copy}>
-        Scan a document or choose a PDF. Pocketproof encrypts it before placing it in your vault.
-      </Text>
-      <View style={styles.action}>
-        <ActionButton onPress={() => router.push("/add")}>Add first document</ActionButton>
-      </View>
-    </View>
+    </MaterialCard>
   );
 }
 
 const styles = StyleSheet.create({
   empty: {
     minHeight: 340,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    padding: 26,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: colors.inkMuted,
-    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
   },
   compact: {
     minHeight: 280,
   },
-  stamp: {
-    width: 60,
-    height: 60,
-    borderWidth: 1,
-    borderColor: colors.forest,
-    borderRadius: 30,
+  content: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    transform: [{ rotate: "-5deg" }],
-    marginBottom: 22,
+    padding: spacing.xxl,
+  },
+  stamp: {
+    width: 72,
+    height: 72,
+    borderRadius: radii.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.signal,
+    marginBottom: spacing.xl,
   },
   title: {
     color: colors.ink,
-    fontFamily: typography.display,
-    fontSize: 27,
-    lineHeight: 32,
-    fontWeight: "700",
+    fontFamily: typography.strong,
+    lineHeight: 30,
+    textAlign: "center",
     maxWidth: 380,
-  },
-  copy: {
-    color: colors.inkMuted,
-    fontFamily: typography.body,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 10,
-    marginBottom: 22,
-    maxWidth: 440,
-  },
-  action: {
-    alignSelf: "stretch",
   },
 });

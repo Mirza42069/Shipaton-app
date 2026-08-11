@@ -1,24 +1,32 @@
+import { useRouter } from "expo-router";
 import type { PropsWithChildren, ReactNode } from "react";
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   type ScrollViewProps,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
+import { Button, IconButton, Surface, Text } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, typography } from "@/lib/theme";
+import { type AppIconName, appIconSource } from "@/components/app-icon";
+import { colors, radii, spacing, typography } from "@/lib/theme";
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   scrollProps?: ScrollViewProps;
+  style?: StyleProp<ViewStyle>;
 }>;
 
-export function Screen({ children, scroll = true, scrollProps }: ScreenProps) {
+export function Screen({ children, scroll = true, scrollProps, style }: ScreenProps) {
   const insets = useSafeAreaInsets();
-  const contentStyle = [styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 92 }];
+  const contentStyle = [
+    styles.content,
+    { paddingBottom: Math.max(insets.bottom, spacing.xl) + 112 },
+    style,
+  ];
 
   if (!scroll) {
     return <View style={[styles.screen, contentStyle]}>{children}</View>;
@@ -43,20 +51,40 @@ export function PageHeader({
   title,
   detail,
   action,
+  showSettings = false,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   detail?: string;
   action?: ReactNode;
+  showSettings?: boolean;
 }) {
+  const router = useRouter();
+
   return (
     <View style={styles.header}>
       <View style={styles.headerCopy}>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
-        <Text style={styles.title}>{title}</Text>
-        {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+        <Text variant="displaySmall" style={styles.title}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text variant="bodyLarge" style={styles.detail}>
+            {detail}
+          </Text>
+        ) : null}
       </View>
-      {action}
+      {action ??
+        (showSettings ? (
+          <IconButton
+            icon={appIconSource("settings")}
+            mode="contained-tonal"
+            size={24}
+            accessibilityLabel="Open settings"
+            onPress={() => router.push("/settings")}
+            style={styles.settingsButton}
+          />
+        ) : null)}
     </View>
   );
 }
@@ -65,6 +93,7 @@ type ActionButtonProps = PropsWithChildren<{
   onPress: () => void;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "danger";
+  icon?: AppIconName;
 }>;
 
 export function ActionButton({
@@ -72,29 +101,60 @@ export function ActionButton({
   onPress,
   disabled = false,
   variant = "primary",
+  icon,
 }: ActionButtonProps) {
+  const outlined = variant === "secondary";
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
+      mode={outlined ? "outlined" : "contained"}
+      icon={icon ? appIconSource(icon) : undefined}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        variant === "secondary" ? styles.buttonSecondary : null,
-        variant === "danger" ? styles.buttonDanger : null,
-        pressed && !disabled ? styles.buttonPressed : null,
-        disabled ? styles.buttonDisabled : null,
-      ]}
+      buttonColor={variant === "danger" ? colors.rust : undefined}
+      textColor={outlined ? colors.forestDark : undefined}
+      contentStyle={styles.buttonContent}
+      labelStyle={styles.buttonLabel}
+      style={styles.button}
     >
-      <Text
-        style={[
-          styles.buttonLabel,
-          variant === "secondary" ? styles.buttonSecondaryLabel : null,
-        ]}
-      >
-        {children}
-      </Text>
-    </Pressable>
+      {children}
+    </Button>
+  );
+}
+
+export function MaterialCard({
+  children,
+  style,
+}: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
+  return (
+    <Surface elevation={1} style={[styles.card, style]}>
+      {children}
+    </Surface>
+  );
+}
+
+export function SectionHeading({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <View style={styles.sectionHeading}>
+      <View style={styles.sectionCopy}>
+        <Text variant="titleLarge" style={styles.sectionTitle}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text variant="bodyMedium" style={styles.sectionDetail}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {action}
+    </View>
   );
 }
 
@@ -105,15 +165,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 16,
-    marginBottom: 26,
+    gap: spacing.lg,
+    marginBottom: spacing.xxxl,
   },
   headerCopy: {
     flex: 1,
@@ -121,61 +181,62 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: colors.forest,
     fontFamily: typography.label,
-    fontWeight: "800",
     fontSize: 12,
-    letterSpacing: 1.8,
-    marginBottom: 7,
+    letterSpacing: 0.4,
+    marginBottom: spacing.sm,
   },
   title: {
     color: colors.ink,
-    fontFamily: typography.display,
-    fontSize: 39,
-    lineHeight: 43,
-    fontWeight: "700",
-    letterSpacing: -1.3,
+    fontFamily: typography.extraBold,
+    fontSize: 38,
+    lineHeight: 44,
+    letterSpacing: -1.1,
   },
   detail: {
     color: colors.inkMuted,
     fontFamily: typography.body,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 8,
-    maxWidth: 560,
+    lineHeight: 23,
+    marginTop: spacing.sm,
+    maxWidth: 600,
+  },
+  settingsButton: {
+    margin: 0,
+    marginTop: 4,
   },
   button: {
+    borderRadius: radii.full,
+  },
+  buttonContent: {
     minHeight: 52,
-    paddingHorizontal: 22,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.forest,
-    borderWidth: 1,
-    borderColor: colors.forest,
-  },
-  buttonSecondary: {
-    backgroundColor: colors.card,
-    borderColor: colors.ink,
-  },
-  buttonDanger: {
-    backgroundColor: colors.rust,
-    borderColor: colors.rust,
-  },
-  buttonPressed: {
-    transform: [{ translateY: 2 }],
-    opacity: 0.88,
-  },
-  buttonDisabled: {
-    opacity: 0.45,
+    paddingHorizontal: spacing.md,
   },
   buttonLabel: {
-    color: colors.white,
-    fontFamily: typography.label,
-    fontWeight: "800",
+    fontFamily: typography.strong,
     fontSize: 14,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
+    letterSpacing: 0,
   },
-  buttonSecondaryLabel: {
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    overflow: "hidden",
+  },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  sectionCopy: { flex: 1 },
+  sectionTitle: {
     color: colors.ink,
+    fontFamily: typography.strong,
+  },
+  sectionDetail: {
+    color: colors.inkMuted,
+    fontFamily: typography.body,
+    marginTop: 3,
   },
 });

@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import { encryptIntoVault } from "@/lib/vault-crypto";
+import { FREE_DOCUMENT_LIMIT, FreeDocumentLimitError } from "@/lib/access-policy";
+import { deleteTemporarySource, deleteVaultFile, encryptIntoVault } from "@/lib/vault-crypto";
 import type { DocumentKind, NewVaultDocument, VaultDocument } from "@/types/document";
 
 type DocumentRow = {
@@ -18,6 +19,15 @@ type DocumentRow = {
   notification_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type SyncedDocumentInput = Omit<NewVaultDocument, "sourceUri"> & {
+  id: string;
+  sourceUri: string;
+  fileSize: number;
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 function rowToDocument(row: DocumentRow): VaultDocument {
@@ -55,32 +65,131 @@ export async function createDocument(
   db: SQLiteDatabase,
   input: NewVaultDocument,
   notificationId: string | null,
+  isPro: boolean,
 ) {
   const id = QuickId.create();
   const now = new Date().toISOString();
   const encrypted = await encryptIntoVault(input.sourceUri, id);
 
+  try {
+    await db.withExclusiveTransactionAsync(async (transaction) => {
+      if (!isPro) {
+        const count = await transaction.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) AS count FROM documents",
+        );
+        if ((count?.count ?? 0) >= FREE_DOCUMENT_LIMIT) throw new FreeDocumentLimitError();
+      }
+
+      await transaction.runAsync(
+      `INSERT INTO documents (
+        id, title, kind, encrypted_uri, original_name, mime_type, file_extension,
+        file_size, expires_at, notes, is_favorite, notification_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+      id,
+      input.title.trim(),
+      input.kind,
+      encrypted.uri,
+      input.originalName,
+      input.mimeType,
+      input.fileExtension,
+      encrypted.fileSize,
+      input.expiresAt,
+      input.notes.trim(),
+      notificationId,
+      now,
+      now,
+      );
+    });
+  } catch (error) {
+    deleteVaultFile(encrypted.uri);
+    throw error;
+  }
+
+  deleteTemporarySource(input.sourceUri);
+
+  return id;
+}
+
+export async function importSyncedDocument(
+  db: SQLiteDatabase,
+  input: SyncedDocumentInput,
+  notificationId: string | null,
+) {
+  const encrypted = await encryptIntoVault(input.sourceUri, input.id);
+  try {
+    await db.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync(
+        `INSERT OR IGNORE INTO documents (
+          id, title, kind, encrypted_uri, original_name, mime_type, file_extension,
+          file_size, expires_at, notes, is_favorite, notification_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        input.id,
+        input.title.trim(),
+        input.kind,
+        encrypted.uri,
+        input.originalName,
+        input.mimeType,
+        input.fileExtension,
+        encrypted.fileSize,
+        input.expiresAt,
+        input.notes.trim(),
+        input.isFavorite ? 1 : 0,
+        notificationId,
+        input.createdAt,
+        input.updatedAt,
+      );
+      await transaction.runAsync(
+        "DELETE FROM document_tombstones WHERE document_id = ?",
+        input.id,
+      );
+    });
+  } catch (error) {
+    deleteVaultFile(encrypted.uri);
+    throw error;
+  } finally {
+    deleteTemporarySource(input.sourceUri);
+  }
+}
+
+export async function applySyncedDocumentMetadata(
+  db: SQLiteDatabase,
+  input: Omit<SyncedDocumentInput, "sourceUri">,
+  notificationId: string | null,
+) {
   await db.runAsync(
-    `INSERT INTO documents (
-      id, title, kind, encrypted_uri, original_name, mime_type, file_extension,
-      file_size, expires_at, notes, is_favorite, notification_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
-    id,
+    `UPDATE documents SET
+      title = ?, kind = ?, original_name = ?, mime_type = ?, file_extension = ?,
+      file_size = ?, expires_at = ?, notes = ?, is_favorite = ?, notification_id = ?,
+      updated_at = ?
+     WHERE id = ?`,
     input.title.trim(),
     input.kind,
-    encrypted.uri,
     input.originalName,
     input.mimeType,
     input.fileExtension,
-    encrypted.fileSize,
+    input.fileSize,
     input.expiresAt,
     input.notes.trim(),
+    input.isFavorite ? 1 : 0,
     notificationId,
-    now,
-    now,
+    input.updatedAt,
+    input.id,
   );
+}
 
-  return id;
+export async function applySyncedDocumentDeletion(
+  db: SQLiteDatabase,
+  id: string,
+  deletedAt: string,
+) {
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
+      "INSERT OR REPLACE INTO document_tombstones (document_id, deleted_at) VALUES (?, ?)",
+      id,
+      deletedAt,
+    );
+    await transaction.runAsync("DELETE FROM documents WHERE id = ?", id);
+  });
 }
 
 export async function setFavorite(db: SQLiteDatabase, id: string, isFavorite: boolean) {
@@ -93,7 +202,20 @@ export async function setFavorite(db: SQLiteDatabase, id: string, isFavorite: bo
 }
 
 export async function removeDocument(db: SQLiteDatabase, id: string) {
-  await db.runAsync("DELETE FROM documents WHERE id = ?", id);
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
+      "INSERT OR REPLACE INTO document_tombstones (document_id, deleted_at) VALUES (?, ?)",
+      id,
+      new Date().toISOString(),
+    );
+    await transaction.runAsync("DELETE FROM documents WHERE id = ?", id);
+  });
+}
+
+export async function listDocumentTombstones(db: SQLiteDatabase) {
+  return db.getAllAsync<{ document_id: string; deleted_at: string }>(
+    "SELECT document_id, deleted_at FROM document_tombstones",
+  );
 }
 
 const QuickId = {

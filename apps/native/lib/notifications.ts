@@ -3,6 +3,15 @@ import { Platform } from "react-native";
 
 const CHANNEL_ID = "document-expiry";
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
 export async function configureNotifications() {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
@@ -14,7 +23,7 @@ export async function configureNotifications() {
   }
 }
 
-export async function scheduleExpiryReminder(title: string, expiresAt: string | null) {
+export async function scheduleExpiryReminder(_title: string, expiresAt: string | null) {
   if (!expiresAt) return null;
 
   const permissions = await Notifications.requestPermissionsAsync();
@@ -31,7 +40,7 @@ export async function scheduleExpiryReminder(title: string, expiresAt: string | 
   return Notifications.scheduleNotificationAsync({
     content: {
       title: "Document needs attention",
-      body: `${title} expires soon. Open Pocketproof to check it.`,
+      body: "One saved document expires soon. Open Berkas to check it.",
       data: { type: "document-expiry" },
     },
     trigger: {
