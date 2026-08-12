@@ -21,13 +21,11 @@ Berkas turns your Galaxy phone into a private, practical home for documents you 
 
 Scan paper or import an image or PDF. Berkas encrypts each local file, stores its details in an encrypted database, and lets you search by name, note, or category. Add an expiry date to receive a local reminder before a passport, policy, or certificate becomes outdated.
 
-Paperwork Plans help when there is a job to finish. Start a passport-renewal, rental-application, or emergency-folder checklist and link each requirement to a vault document without creating another local copy.
-
 Berkas Free:
 
 - Up to five locally encrypted documents
 - No login or account required
-- Search, categories, expiry reminders, and paperwork plans
+- Search, categories, favorites, and expiry reminders
 
 Berkas Pro:
 
@@ -35,7 +33,7 @@ Berkas Pro:
 - Optional Google Drive sync
 - Pro works locally without Google sign-in
 
-If a Pro user enables Drive sync, Berkas uploads normal, readable PDFs and images to a visible `Berkas` folder in that user's Google Drive. Drive copies use Google account and Drive security; they are not protected by the local Berkas vault encryption. Berkas explains this before requesting Google access.
+If a Pro user enables Drive sync, Berkas encrypts document contents, filenames, titles, notes, and synchronization metadata on the device before uploading opaque backup files to that user's Google Drive. Restoring on another device requires the user's recovery key. Berkas and Google cannot recover a lost key.
 
 Built for Galaxy:
 
@@ -57,11 +55,11 @@ Removing the app or clearing app data removes local files. Existing optional Goo
 
 ## Release Notes
 
-Berkas 1.0 introduces an encrypted local vault, scanning and import, expiry reminders, reusable paperwork plans, biometric locking, adaptive Galaxy layouts, and optional Google Drive sync for Pro.
+Berkas 1.0 introduces an encrypted local vault, scanning and import, expiry reminders, biometric locking, adaptive Galaxy layouts, and optional encrypted Google Drive sync for Pro.
 
 ## Search Terms
 
-document vault, document organizer, encrypted files, expiry reminder, passport, paperwork, local storage, scan documents, Google Drive
+document vault, document organizer, encrypted files, expiry reminder, passport, local storage, scan documents, Google Drive
 
 ## Permission Explanations
 
@@ -72,7 +70,7 @@ document vault, document organizer, encrypted files, expiry reminder, passport, 
 
 ## Data Safety Draft
 
-- Documents and files: Stored locally; readable copies are shared with Google Drive only when a Pro user explicitly enables sync.
+- Documents and files: Stored encrypted locally; encrypted backup files are shared with Google Drive only when a Pro user explicitly enables sync.
 - Personal information: Google email, display name, and account identifier are processed to display and operate the selected Drive connection.
 - Purchases: Samsung IAP and RevenueCat process transaction and entitlement information.
 - Device or other identifiers: RevenueCat uses an anonymous app user identifier; automatic device identifier collection is disabled. Google services may process identifiers for sign-in, Drive, scanner delivery, and diagnostics.
@@ -93,11 +91,9 @@ Berkas Free requires no account. Reviewers can add up to five documents and use 
 2. Vault with document categories and search.
 3. Add-document scan/import flow.
 4. Encrypted local document detail.
-5. Paperwork Plans templates.
-6. Active plan with linked requirements.
-7. Berkas Pro and optional Drive disclosure.
-8. Connected Drive state after a successful sync.
-9. Landscape or tablet adaptive layout.
+5. Berkas Pro and optional Drive disclosure.
+6. Connected Drive state after a successful sync.
+7. Landscape or tablet adaptive layout.
 
 Use synthetic documents only, and ensure every screenshot matches the submitted binary.
 

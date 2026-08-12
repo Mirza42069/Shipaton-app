@@ -89,10 +89,8 @@ export function SecurityProvider({ children }: PropsWithChildren) {
     try {
       return await action();
     } finally {
-      setTimeout(() => {
-        autoLockPaused.current = false;
-        if (biometricEnabled && AppState.currentState !== "active") setIsLocked(true);
-      }, 30_000);
+      autoLockPaused.current = false;
+      if (biometricEnabled && AppState.currentState !== "active") setIsLocked(true);
     }
   }
 

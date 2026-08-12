@@ -3,6 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def releaseStoreFilePath = System.getenv("BERKAS_RELEASE_STORE_FILE")
+def releaseStorePassword = System.getenv("BERKAS_RELEASE_STORE_PASSWORD")
+def releaseKeyAlias = System.getenv("BERKAS_RELEASE_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("BERKAS_RELEASE_KEY_PASSWORD")
+def releaseSigningValues = [releaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+
+if (releaseTaskRequested && releaseSigningValues.any { !it }) {
+    throw new GradleException("Release signing requires BERKAS_RELEASE_STORE_FILE, BERKAS_RELEASE_STORE_PASSWORD, BERKAS_RELEASE_KEY_ALIAS, and BERKAS_RELEASE_KEY_PASSWORD.")
+}
+
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -104,6 +115,15 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
+        release {
+            if (releaseSigningValues.every { it }) {
+                storeFile file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
@@ -112,7 +132,7 @@ android {
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, View, useWindowDimensions } from "react-native";
-import { ActivityIndicator, Button, IconButton, Surface, Text } from "react-native-paper";
+import { ActivityIndicator, Button, Dialog, IconButton, Portal, RadioButton, Surface, Text, TouchableRipple } from "react-native-paper";
 
 import { AppIcon, type AppIconName, appIconSource } from "@/components/app-icon";
 import { MaterialCard, PageHeader, Screen } from "@/components/screen";
@@ -19,7 +19,7 @@ export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { documents, isLoading, deleteDocument, toggleFavorite } = useVault();
+  const { documents, folders, isLoading, deleteDocument, toggleFavorite, moveDocument } = useVault();
   const { runWithAutoLockPaused } = useSecurity();
   const document = documents.find((item) => item.id === id);
   const encryptedUri = document?.encryptedUri;
@@ -32,6 +32,7 @@ export default function DocumentDetailScreen() {
   const [isOpening, setIsOpening] = useState(false);
   const [isFavoriteUpdating, setIsFavoriteUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
   const wide = width >= 760;
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export default function DocumentDetailScreen() {
   const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
   const expiry = expiryLabel(document.expiresAt);
   const currentDocument = document;
+  const folder = folders.find((item) => item.id === document.folderId) ?? null;
   const actionsBusy = isOpening || isDeleting || isFavoriteUpdating || isPreviewLoading;
 
   async function openOrShare() {
@@ -264,6 +266,23 @@ export default function DocumentDetailScreen() {
             />
           </View>
 
+          <TouchableRipple
+            accessibilityRole="button"
+            accessibilityLabel={`Folder, ${folder?.name ?? "Unfiled"}`}
+            accessibilityHint="Moves this file to another folder"
+            onPress={() => setShowFolderPicker(true)}
+            style={styles.folderRow}
+          >
+            <View style={styles.folderRowInner}>
+              <AppIcon name="folder" size={21} color={colors.forest} />
+              <View style={styles.folderRowCopy}>
+                <Text style={styles.folderRowLabel}>Folder</Text>
+                <Text style={styles.folderRowValue}>{folder?.name ?? "Unfiled"}</Text>
+              </View>
+              <AppIcon name="chevron-right" size={19} color={colors.inkMuted} />
+            </View>
+          </TouchableRipple>
+
           {document.notes ? (
             <Surface elevation={0} style={styles.note}>
               <View style={styles.noteHeading}>
@@ -318,6 +337,32 @@ export default function DocumentDetailScreen() {
           </View>
         </View>
       </View>
+
+      <Portal>
+        <Dialog visible={showFolderPicker} onDismiss={() => setShowFolderPicker(false)} style={styles.folderDialog}>
+          <Dialog.Title>Move to folder</Dialog.Title>
+          <Dialog.ScrollArea>
+            <View style={styles.folderOptions}>
+              <RadioButton.Item
+                label="Unfiled"
+                value="unfiled"
+                status={document.folderId === null ? "checked" : "unchecked"}
+                onPress={() => void moveDocument(document.id, null).then(() => setShowFolderPicker(false))}
+              />
+              {folders.map((item) => (
+                <RadioButton.Item
+                  key={item.id}
+                  label={item.name}
+                  value={item.id}
+                  status={document.folderId === item.id ? "checked" : "unchecked"}
+                  onPress={() => void moveDocument(document.id, item.id).then(() => setShowFolderPicker(false))}
+                />
+              ))}
+            </View>
+          </Dialog.ScrollArea>
+          <Dialog.Actions><Button onPress={() => setShowFolderPicker(false)}>Cancel</Button></Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }
@@ -394,6 +439,13 @@ const styles = StyleSheet.create({
   detailsWide: { flex: 0.95, paddingTop: spacing.md },
   favoriteButton: { margin: 0, marginTop: 2 },
   facts: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  folderRow: { marginTop: spacing.lg, borderRadius: radii.md, backgroundColor: colors.surface },
+  folderRowInner: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
+  folderRowCopy: { flex: 1 },
+  folderRowLabel: { color: colors.inkMuted, fontFamily: typography.label, fontSize: 10 },
+  folderRowValue: { color: colors.ink, fontFamily: typography.strong, fontSize: 13, marginTop: 2 },
+  folderDialog: { borderRadius: radii.lg, backgroundColor: colors.card },
+  folderOptions: { paddingVertical: spacing.sm },
   fact: {
     minWidth: 105,
     flex: 1,

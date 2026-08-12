@@ -20,7 +20,15 @@ const sections = [
   },
   {
     title: "Optional Google Drive sync",
-    copy: "Pro users may connect Google Drive. Berkas then uploads normal, readable PDFs and images to a visible Drive folder and stores document metadata in hidden Drive app data. These cloud copies do not use local vault encryption.",
+    copy: "Pro users may connect Google Drive. Berkas encrypts document contents, filenames, titles, notes, and synchronization metadata on the device before upload. Google receives opaque Berkas backup files and cannot decrypt them.",
+  },
+  {
+    title: "Processes",
+    copy: "Process names, requirement checklists, completion status, and links to vault documents are encrypted in the local database. Process metadata is not currently included in Google Drive sync.",
+  },
+  {
+    title: "Drive recovery key",
+    copy: "Encrypted Drive backups use a recovery key stored in Android secure storage. Berkas has no account or server that can recover a lost key. Anyone with the key can restore the backup, so it should be kept in a password manager.",
   },
   {
     title: "Document scanning",
@@ -32,7 +40,7 @@ const sections = [
   },
   {
     title: "Deletion and retention",
-    copy: "Deleting a vault item removes its encrypted local file and reminder. A synced Drive copy moves to trash on the next sync. Disconnecting or losing Pro does not delete either copy.",
+    copy: "Deleting a vault item removes its encrypted local file and reminder. Its encrypted Drive backup moves to trash on the next sync. Disconnecting or losing Pro does not delete either copy.",
   },
   {
     title: "Permissions",

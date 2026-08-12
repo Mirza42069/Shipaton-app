@@ -1,4 +1,4 @@
-import type { DocumentKind, VaultDocument } from "@/types/document";
+import type { DocumentKind, VaultDocument, VaultFolder } from "@/types/document";
 
 export type GoogleDriveAccount = {
   id: string;
@@ -26,14 +26,20 @@ export type DriveManifestDocument = Pick<
   | "isFavorite"
   | "createdAt"
   | "updatedAt"
+  | "folderId"
 > & {
   kind: DocumentKind;
   remoteFileId: string | null;
   deletedAt: string | null;
 };
 
+export type DriveManifestFolder = VaultFolder & {
+  deletedAt: string | null;
+};
+
 export type DriveManifest = {
-  schema: 1;
+  schema: 2;
+  folders: DriveManifestFolder[];
   documents: DriveManifestDocument[];
   updatedAt: string;
 };

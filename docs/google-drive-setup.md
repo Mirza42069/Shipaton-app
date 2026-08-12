@@ -1,6 +1,6 @@
 # Google Drive Setup
 
-Berkas uses Google sign-in only when a Pro user enables optional Drive sync. It requests `drive.file` for app-created readable documents and `drive.appdata` for hidden synchronization metadata. Both are narrow, non-sensitive Drive scopes.
+Berkas uses Google sign-in only when a Pro user enables optional Drive sync. It requests `drive.file` for app-created encrypted backup files and `drive.appdata` for the encrypted synchronization index. Both are narrow, non-sensitive Drive scopes.
 
 ## Google Cloud
 
@@ -25,7 +25,7 @@ $env:JAVA_HOME='C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot'
 ## Sync Behavior
 
 - Visible files: `My Drive/Berkas/<document title>.<extension>`
-- Hidden file: `berkas-index.json` in Google Drive application data
+- Hidden file: encrypted `berkas-index.json` in Google Drive application data
 - Uploads use resumable Drive sessions.
 - Downloads are immediately encrypted into the local Berkas vault.
 - Deleting a document in Berkas moves its Drive copy to trash at the next sync.
@@ -38,8 +38,8 @@ $env:JAVA_HOME='C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot'
 1. Build and sign the exact `app.berkas.android` package registered in Google Cloud.
 2. Activate Berkas Pro through a Samsung licensed tester.
 3. Open Settings and tap Connect Google Drive.
-4. Confirm the readable-copy disclosure appears before Google sign-in.
+4. Save the recovery key and confirm the encrypted-backup disclosure appears before Google sign-in.
 5. Sync a synthetic PDF and image.
-6. Confirm both open normally in Google Drive.
+6. Confirm Google Drive contains opaque `.berkas` files that cannot be previewed there.
 7. Install Berkas on another device, enable Pro, connect the same Google account, and confirm downloads are re-encrypted locally.
 8. Disconnect Google and verify local documents remain available.

@@ -44,7 +44,7 @@ The generated Android project is tracked. Run Expo Prebuild after every package,
 - [ ] Cold start in airplane mode without a login prompt.
 - [ ] Add five synthetic documents and verify the sixth is blocked.
 - [ ] Reopen and decrypt imported image/PDF files.
-- [ ] Test search, expiry notifications, biometric lock, screenshot blocking, sharing, plans, rotation, and split-screen.
+- [ ] Test search, expiry notifications, biometric lock, screenshot blocking, sharing, rotation, and split-screen.
 - [ ] Confirm denied camera, notification, and biometric permissions do not crash.
 
 ## Subscription and Drive Validation
@@ -53,7 +53,8 @@ The generated Android project is tracked. Run Expo Prebuild after every package,
 - [ ] Confirm a sixth document is allowed with Pro.
 - [ ] Confirm Drive disclosure appears before Google sign-in.
 - [ ] Connect a Google OAuth test account and sync a PDF and image.
-- [ ] Open readable files in `My Drive/Berkas`.
+- [ ] Confirm `My Drive/Berkas` contains only opaque `.berkas` backups.
+- [ ] Restore on another test device using the saved recovery key.
 - [ ] Restore on a second device and confirm local encryption.
 - [ ] Delete in Berkas and verify the Drive copy moves to trash after sync.
 - [ ] Verify a different Google account is blocked from receiving the bound vault.
@@ -64,6 +65,6 @@ The generated Android project is tracked. Run Expo Prebuild after every package,
 
 - [ ] Use `docs/galaxy-store-listing.md` for matching metadata and screenshots.
 - [ ] Include the United States for Shipaton judging.
-- [ ] Complete Data Safety for local files, Google account information, readable Drive copies, Samsung IAP, RevenueCat, and Google ML Kit.
+- [ ] Complete Data Safety for local files, Google account information, encrypted Drive backups, Samsung IAP, RevenueCat, and Google ML Kit.
 - [ ] Provide Samsung licensed-test and Google OAuth test instructions to reviewers.
 - [ ] Verify the app name, package, icon, description, screenshots, subscription price, and privacy policy match the submitted binary.

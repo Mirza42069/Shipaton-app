@@ -1,9 +1,8 @@
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Text as PaperText } from "react-native-paper";
+import { Surface, Text } from "react-native-paper";
 
 import { AppIcon } from "@/components/app-icon";
-import { MaterialCard } from "@/components/screen";
 import { expiryLabel, formatFileSize } from "@/lib/date";
 import { colors, radii, spacing, typography } from "@/lib/theme";
 import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument } from "@/types/document";
@@ -14,162 +13,143 @@ export function DocumentCard({ document, compact = false }: { document: VaultDoc
   const expiry = expiryLabel(document.expiresAt);
 
   return (
-    <MaterialCard style={[styles.card, compact ? styles.cardCompact : null]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${document.title}, ${kind.label}, ${expiry.label}${document.isFavorite ? ", favorite" : ""}`}
-        accessibilityHint="Opens document details"
-        android_ripple={{ color: colors.forestSoft }}
-        onPress={() => router.push({ pathname: "/document/[id]", params: { id: document.id } })}
-        style={({ pressed }) => [styles.cardContent, pressed && styles.cardPressed]}
-      >
-        <View style={styles.topRow}>
-          <View style={styles.kindMark}>
-            <AppIcon name={kind.icon} size={20} color={colors.forestDark} />
-          </View>
-          <PaperText variant="labelMedium" style={styles.kind}>{kind.shortLabel}</PaperText>
-          {document.isFavorite ? (
-            <View style={styles.favoriteMark}>
-              <AppIcon name="bookmark" size={15} color={colors.forest} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${document.title}, ${kind.label}, ${expiry.label}${document.isFavorite ? ", favorite" : ""}`}
+      accessibilityHint="Opens document details"
+      android_ripple={{ color: colors.forestSoft }}
+      onPress={() => router.push({ pathname: "/document/[id]", params: { id: document.id } })}
+      style={({ pressed }) => [styles.pressable, pressed ? styles.pressed : null]}
+    >
+      <Surface elevation={1} style={[styles.card, compact ? styles.compact : null]}>
+        <View style={styles.paperObject}>
+          <View style={styles.paperBack} />
+          <View style={styles.paperTab} />
+          <View style={styles.paperFront}>
+            <View style={styles.kindIcon}>
+              <AppIcon name={kind.icon} size={22} color={colors.forestDark} />
             </View>
-          ) : null}
+            <Text style={styles.extension}>{document.fileExtension.replace(".", "").toUpperCase()}</Text>
+            {document.isFavorite ? (
+              <AppIcon name="bookmark" size={18} color={colors.forest} filled />
+            ) : null}
+          </View>
         </View>
 
-        <PaperText variant="titleLarge" style={styles.documentTitle} numberOfLines={2}>
-          {document.title}
-        </PaperText>
-        <PaperText variant="bodySmall" style={styles.fileMeta} numberOfLines={1}>
-          {document.fileExtension.replace(".", "").toUpperCase()} · {formatFileSize(document.fileSize)}
-        </PaperText>
-
-        <View style={styles.footer}>
-          <View
-            style={[
-              styles.expiryPill,
-              expiry.tone === "danger" ? styles.expiryPillDanger : null,
-              expiry.tone === "warning" ? styles.expiryPillWarning : null,
-            ]}
-          >
+        <View style={styles.copy}>
+          <Text variant="titleMedium" style={styles.title} numberOfLines={2}>
+            {document.title}
+          </Text>
+          <Text variant="bodySmall" style={styles.meta} numberOfLines={1}>
+            {kind.label} · {formatFileSize(document.fileSize)}
+          </Text>
+          <View style={styles.footer}>
             <View
               style={[
-                styles.statusDot,
+                styles.status,
                 expiry.tone === "danger" ? styles.statusDanger : null,
                 expiry.tone === "warning" ? styles.statusWarning : null,
               ]}
-            />
-            <PaperText
-              variant="labelSmall"
-              style={[
-                styles.expiry,
-                expiry.tone === "danger" ? styles.expiryDanger : null,
-                expiry.tone === "warning" ? styles.expiryWarning : null,
-              ]}
             >
-              {expiry.label}
-            </PaperText>
+              <View
+                style={[
+                  styles.dot,
+                  expiry.tone === "danger" ? styles.dotDanger : null,
+                  expiry.tone === "warning" ? styles.dotWarning : null,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  expiry.tone === "danger" ? styles.statusTextDanger : null,
+                  expiry.tone === "warning" ? styles.statusTextWarning : null,
+                ]}
+              >
+                {expiry.label}
+              </Text>
+            </View>
+            <AppIcon name="chevron-right" size={19} color={colors.inkMuted} />
           </View>
-          <AppIcon name="chevron-right" size={19} color={colors.inkMuted} />
         </View>
-      </Pressable>
-    </MaterialCard>
+      </Surface>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: { borderRadius: radii.lg, overflow: "hidden" },
+  pressed: { transform: [{ scale: 0.985 }], opacity: 0.9 },
   card: {
-    minHeight: 188,
-    borderRadius: radii.lg,
-  },
-  cardCompact: {
-    minHeight: 174,
-  },
-  cardContent: {
-    flex: 1,
-    padding: spacing.lg,
-  },
-  cardPressed: {
-    opacity: 0.78,
-  },
-  topRow: {
+    minHeight: 176,
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    overflow: "hidden",
   },
-  kindMark: {
-    width: 40,
-    height: 40,
+  compact: { minHeight: 164 },
+  paperObject: { width: 96, height: 122, justifyContent: "flex-end" },
+  paperBack: {
+    position: "absolute",
+    left: 9,
+    right: 4,
+    top: 1,
+    height: 106,
+    borderRadius: 15,
+    backgroundColor: colors.forestSoft,
+    transform: [{ rotate: "4deg" }],
+  },
+  paperTab: {
+    position: "absolute",
+    right: 9,
+    top: 0,
+    width: 31,
+    height: 16,
+    borderTopLeftRadius: 9,
+    borderTopRightRadius: 9,
+    backgroundColor: colors.signal,
+  },
+  paperFront: {
+    height: 108,
+    borderRadius: 16,
+    padding: spacing.md,
+    justifyContent: "space-between",
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.rule,
+  },
+  kindIcon: {
+    width: 38,
+    height: 38,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.forestSoft,
+    backgroundColor: colors.signal,
   },
-  kind: {
-    marginLeft: 9,
-    color: colors.forest,
-    fontFamily: typography.label,
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
-  favoriteMark: {
-    marginLeft: "auto",
-    width: 32,
-    height: 32,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  documentTitle: {
-    marginTop: spacing.lg,
-    color: colors.ink,
-    fontFamily: typography.strong,
-    lineHeight: 28,
-    letterSpacing: -0.3,
-  },
-  fileMeta: {
-    marginTop: spacing.xs,
-    color: colors.inkMuted,
-    fontFamily: typography.medium,
-    letterSpacing: 0.3,
-  },
-  footer: {
+  extension: { color: colors.inkMuted, fontFamily: typography.extraBold, fontSize: 10, letterSpacing: 1 },
+  copy: { flex: 1, alignSelf: "stretch", paddingVertical: spacing.xs },
+  title: { color: colors.ink, fontFamily: typography.strong, lineHeight: 23 },
+  meta: { color: colors.inkMuted, fontFamily: typography.medium, marginTop: 5 },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: "auto" },
+  status: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: "auto",
-    paddingTop: spacing.lg,
-  },
-  expiryPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: spacing.md,
+    gap: 7,
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radii.full,
     backgroundColor: colors.forestSoft,
   },
-  expiryPillDanger: { backgroundColor: colors.rustSoft },
-  expiryPillWarning: { backgroundColor: colors.warningSoft },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: spacing.sm,
-    backgroundColor: colors.forest,
-  },
-  statusDanger: {
-    backgroundColor: colors.rust,
-  },
-  statusWarning: {
-    backgroundColor: colors.warning,
-  },
-  expiry: {
-    color: colors.forestDark,
-    fontFamily: typography.label,
-  },
-  expiryDanger: {
-    color: colors.rust,
-  },
-  expiryWarning: {
-    color: colors.warning,
-  },
+  statusDanger: { backgroundColor: colors.rustSoft },
+  statusWarning: { backgroundColor: colors.warningSoft },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.forest },
+  dotDanger: { backgroundColor: colors.rust },
+  dotWarning: { backgroundColor: colors.warning },
+  statusText: { color: colors.forestDark, fontFamily: typography.label, fontSize: 10 },
+  statusTextDanger: { color: colors.rust },
+  statusTextWarning: { color: colors.warning },
 });

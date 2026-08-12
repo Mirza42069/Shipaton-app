@@ -11,53 +11,29 @@ import { usePreventScreenCapture } from "expo-screen-capture";
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { PaperProvider } from "react-native-paper";
 
 import { AppIcon } from "@/components/app-icon";
 import { ActionButton } from "@/components/screen";
-import { TutorialCarousel } from "@/components/tutorial-carousel";
 import { DriveSyncProvider } from "@/contexts/drive-sync-context";
-import { PaperworkProvider } from "@/contexts/paperwork-context";
+import { ProcessProvider } from "@/contexts/process-context";
 import { PurchasesProvider } from "@/contexts/purchases-context";
 import { SecurityProvider, useSecurity } from "@/contexts/security-context";
 import { VaultProvider } from "@/contexts/vault-context";
 import { initializeDatabase } from "@/lib/database";
+import { clearDriveBackupFiles } from "@/lib/drive-backup-crypto";
 import { configureNotifications } from "@/lib/notifications";
 import { colors, paperTheme, radii, typography } from "@/lib/theme";
-import { hasCompletedTutorial, markTutorialComplete } from "@/lib/tutorial";
-import { clearPreviewFiles, clearTemporarySources } from "@/lib/vault-crypto";
+import { clearImportFiles, clearPreviewFiles } from "@/lib/vault-crypto";
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
 void SplashScreen.preventAutoHideAsync();
-
-function TutorialGate({ children }: { children: React.ReactNode }) {
-  const [completed, setCompleted] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    void hasCompletedTutorial().then(setCompleted).catch(() => setCompleted(false));
-  }, []);
-
-  if (completed === null) return <View style={styles.loading} />;
-  if (completed) return children;
-
-  return (
-    <TutorialCarousel
-      onFinish={async () => {
-        try {
-          await markTutorialComplete();
-        } finally {
-          setCompleted(true);
-        }
-      }}
-    />
-  );
-}
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isLocked, unlock } = useSecurity();
@@ -88,14 +64,15 @@ function RootStack() {
 
   useEffect(() => {
     clearPreviewFiles();
-    clearTemporarySources();
+    clearImportFiles();
+    clearDriveBackupFiles();
     void configureNotifications();
   }, []);
 
   return (
     <SQLiteProvider databaseName="berkas.db" onInit={initializeDatabase}>
       <VaultProvider>
-        <PaperworkProvider>
+        <ProcessProvider>
           <DriveSyncProvider>
             <LockGate>
               <Stack
@@ -118,6 +95,10 @@ function RootStack() {
                 }}
               />
               <Stack.Screen name="settings" options={{ title: "" }} />
+              <Stack.Screen
+                name="paywall"
+                options={{ headerShown: false, presentation: "modal", animation: "slide_from_bottom" }}
+              />
               <Stack.Screen name="guide" options={{ title: "" }} />
               <Stack.Screen
                 name="tutorial"
@@ -140,15 +121,13 @@ function RootStack() {
                 })}
               />
               <Stack.Screen name="privacy" options={{ title: "" }} />
-              <Stack.Screen name="paperwork/[id]" options={{ title: "" }} />
-              <Stack.Screen
-                name="link-document"
-                options={{ title: "", presentation: "modal" }}
-              />
+              <Stack.Screen name="process/new" options={{ title: "" }} />
+              <Stack.Screen name="process/[id]" options={{ title: "" }} />
+              <Stack.Screen name="process/link-document" options={{ title: "" }} />
               </Stack>
             </LockGate>
           </DriveSyncProvider>
-        </PaperworkProvider>
+        </ProcessProvider>
       </VaultProvider>
     </SQLiteProvider>
   );
@@ -173,13 +152,11 @@ export default function Layout() {
     <GestureHandlerRootView style={styles.root}>
       <PaperProvider theme={paperTheme}>
         <StatusBar style="dark" />
-        <TutorialGate>
-          <SecurityProvider>
-            <PurchasesProvider>
-              <RootStack />
-            </PurchasesProvider>
-          </SecurityProvider>
-        </TutorialGate>
+        <SecurityProvider>
+          <PurchasesProvider>
+            <RootStack />
+          </PurchasesProvider>
+        </SecurityProvider>
       </PaperProvider>
     </GestureHandlerRootView>
   );

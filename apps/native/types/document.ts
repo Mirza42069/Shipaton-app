@@ -17,6 +17,7 @@ export type VaultDocument = {
   id: string;
   title: string;
   kind: DocumentKind;
+  folderId: string | null;
   encryptedUri: string;
   originalName: string;
   mimeType: string;
@@ -32,9 +33,16 @@ export type VaultDocument = {
 
 export type NewVaultDocument = Pick<
   VaultDocument,
-  "title" | "kind" | "originalName" | "mimeType" | "fileExtension" | "expiresAt" | "notes"
+  "title" | "kind" | "folderId" | "originalName" | "mimeType" | "fileExtension" | "expiresAt" | "notes"
 > & {
   sourceUri: string;
+};
+
+export type VaultFolder = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type DocumentKindDefinition = {

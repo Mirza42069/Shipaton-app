@@ -30,9 +30,13 @@ const chapters: Chapter[] = [
     points: ["Add an expiry date when saving.", "Berkas highlights documents that need attention.", "Reminders stay on this device."],
   },
   {
-    title: "Paperwork Plans",
-    icon: "plans",
-    points: ["Choose a checklist template.", "Link an existing vault document to each item.", "One document can be used in several plans."],
+    title: "Processes",
+    icon: "list",
+    points: [
+      "Start a visa or passport renewal template, or create your own.",
+      "Link proof from the Vault and confirm each requirement.",
+      "Process checklists stay encrypted on this device and are not included in Drive backup yet.",
+    ],
   },
   {
     title: "Security",
@@ -42,7 +46,7 @@ const chapters: Chapter[] = [
   {
     title: "Pro and Google Drive",
     icon: "cloud",
-    points: ["Free includes five local documents.", "Pro unlocks unlimited local documents.", "Drive sync is optional and uploads readable copies."],
+    points: ["Free includes five local documents.", "Pro unlocks unlimited local documents.", "Optional Drive backups are encrypted before upload and require your recovery key to restore."],
   },
 ];
 

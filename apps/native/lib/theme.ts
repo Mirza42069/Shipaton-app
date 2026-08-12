@@ -51,7 +51,9 @@ const defaultFonts = MD3LightTheme.fonts;
 
 export const paperTheme = {
   ...MD3LightTheme,
+  version: 3 as const,
   roundness: 5,
+  animation: { scale: 1 },
   colors: {
     ...MD3LightTheme.colors,
     primary: colors.forest,
@@ -79,6 +81,7 @@ export const paperTheme = {
     outlineVariant: colors.rule,
     shadow: colors.black,
     scrim: colors.black,
+    backdrop: "rgba(27, 33, 26, 0.42)",
     inverseSurface: colors.forestDark,
     inverseOnSurface: "#F2F6EF",
     inversePrimary: "#BED8AE",

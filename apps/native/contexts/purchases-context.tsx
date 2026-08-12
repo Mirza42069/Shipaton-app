@@ -20,9 +20,12 @@ type PurchasesContextValue = {
   isConfigured: boolean;
   isPro: boolean;
   isLoading: boolean;
+  isOfferingsLoading: boolean;
+  offeringsError: string | null;
   packages: PurchasesPackage[];
   purchase: (item: PurchasesPackage) => Promise<void>;
   restore: () => Promise<void>;
+  refreshOfferings: () => Promise<void>;
 };
 
 const PurchasesContext = createContext<PurchasesContextValue | null>(null);
@@ -35,7 +38,23 @@ export function PurchasesProvider({ children }: PropsWithChildren) {
   const isConfigured = Platform.OS === "android" && Boolean(galaxyApiKey);
   const [isPro, setIsPro] = useState(false);
   const [isLoading, setIsLoading] = useState(isConfigured);
+  const [isOfferingsLoading, setIsOfferingsLoading] = useState(isConfigured);
+  const [offeringsError, setOfferingsError] = useState<string | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+
+  async function refreshOfferings() {
+    if (!isConfigured) return;
+    setIsOfferingsLoading(true);
+    setOfferingsError(null);
+    try {
+      const offerings = await Purchases.getOfferings();
+      setPackages(offerings.current?.availablePackages ?? []);
+    } catch {
+      setOfferingsError("Could not load the Galaxy Store offer. Check your connection and try again.");
+    } finally {
+      setIsOfferingsLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!isConfigured || !galaxyApiKey) return;
@@ -58,9 +77,7 @@ export function PurchasesProvider({ children }: PropsWithChildren) {
         .then((customerInfo) => setIsPro(hasProEntitlement(customerInfo)))
         .catch(() => undefined)
         .finally(() => setIsLoading(false));
-      void Purchases.getOfferings()
-        .then((offerings) => setPackages(offerings.current?.availablePackages ?? []))
-        .catch(() => undefined);
+      void refreshOfferings();
     }
 
     refreshPurchases();
@@ -85,7 +102,19 @@ export function PurchasesProvider({ children }: PropsWithChildren) {
   }
 
   return (
-    <PurchasesContext value={{ isConfigured, isPro, isLoading, packages, purchase, restore }}>
+    <PurchasesContext
+      value={{
+        isConfigured,
+        isPro,
+        isLoading,
+        isOfferingsLoading,
+        offeringsError,
+        packages,
+        purchase,
+        restore,
+        refreshOfferings,
+      }}
+    >
       {children}
     </PurchasesContext>
   );

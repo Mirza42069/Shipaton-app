@@ -65,7 +65,7 @@ export function PageHeader({
     <View style={styles.header}>
       <View style={styles.headerCopy}>
         {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text variant="displaySmall" style={styles.title}>
+        <Text variant="displaySmall" style={styles.title} accessibilityRole="header">
           {title}
         </Text>
         {detail ? (

@@ -6,6 +6,7 @@ import {
   aesEncryptAsync,
 } from "expo-crypto";
 
+import { assertSafeDocumentId, assertSafeFileExtension } from "@/lib/document-file";
 import { getVaultKeyHex } from "@/lib/vault-key";
 
 const MAGIC = new Uint8Array([0x42, 0x4b, 0x56, 0x31]);
@@ -44,25 +45,23 @@ function importDirectory() {
   return directory;
 }
 
-export function stageTemporarySource(sourceUri: string, extension: string) {
+export async function stageTemporarySource(sourceUri: string, extension: string) {
+  const safeExtension = assertSafeFileExtension(extension);
   const source = new File(sourceUri);
   const destination = new File(
     importDirectory(),
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${extension}`,
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${safeExtension}`,
   );
-  source.copy(destination);
-  try {
-    if (source.exists) source.delete();
-  } catch {
-    // Content providers own scanner URIs and may not permit callers to delete them.
-  }
+  await source.copy(destination);
+  deleteTemporarySource(sourceUri);
   return destination.uri;
 }
 
 export function writeTemporarySource(bytes: Uint8Array, extension: string) {
+  const safeExtension = assertSafeFileExtension(extension);
   const destination = new File(
     importDirectory(),
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${extension}`,
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${safeExtension}`,
   );
   destination.create({ overwrite: false, intermediates: true });
   destination.write(bytes);
@@ -70,6 +69,7 @@ export function writeTemporarySource(bytes: Uint8Array, extension: string) {
 }
 
 export async function encryptIntoVault(sourceUri: string, documentId: string) {
+  const safeDocumentId = assertSafeDocumentId(documentId);
   const source = new File(sourceUri);
   const plainBytes = await source.bytes();
   const key = await AESEncryptionKey.import(await getVaultKeyHex(), "hex");
@@ -78,7 +78,7 @@ export async function encryptIntoVault(sourceUri: string, documentId: string) {
     tagLength: TAG_LENGTH,
   });
   const payload = joinBytes(MAGIC, await sealed.combined());
-  const destination = new File(vaultDirectory(), `${documentId}.ppv`);
+  const destination = new File(vaultDirectory(), `${safeDocumentId}.ppv`);
 
   destination.create({ overwrite: false, intermediates: true });
   destination.write(payload);
@@ -91,6 +91,8 @@ export async function decryptForPreview(
   documentId: string,
   extension: string,
 ) {
+  const safeDocumentId = assertSafeDocumentId(documentId);
+  const safeExtension = assertSafeFileExtension(extension);
   const encryptedFile = new File(encryptedUri);
   const payload = await encryptedFile.bytes();
 
@@ -104,7 +106,7 @@ export async function decryptForPreview(
     tagLength: TAG_LENGTH,
   });
   const plain = await aesDecryptAsync(sealed, key);
-  const preview = new File(previewDirectory(), `${documentId}${extension}`);
+  const preview = new File(previewDirectory(), `${safeDocumentId}${safeExtension}`);
 
   preview.create({ overwrite: true, intermediates: true });
   preview.write(plain);
@@ -126,7 +128,9 @@ export function deleteTemporarySource(uri: string) {
 }
 
 export function deletePreviewFile(documentId: string, extension: string) {
-  const file = new File(Paths.cache, "berkas-preview", `${documentId}${extension}`);
+  const safeDocumentId = assertSafeDocumentId(documentId);
+  const safeExtension = assertSafeFileExtension(extension);
+  const file = new File(Paths.cache, "berkas-preview", `${safeDocumentId}${safeExtension}`);
   if (file.exists) file.delete();
 }
 
@@ -135,7 +139,7 @@ export function clearPreviewFiles() {
   if (directory.exists) directory.delete();
 }
 
-export function clearTemporarySources() {
+export function clearImportFiles() {
   const directory = new Directory(Paths.cache, "berkas-import");
   if (directory.exists) directory.delete();
 }

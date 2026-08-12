@@ -3,6 +3,7 @@ import type { File } from "expo-file-system";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
+const MAX_MANIFEST_BYTES = 1024 * 1024;
 
 export const DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
@@ -26,6 +27,45 @@ class GoogleDriveRequestError extends Error {
     super(message);
     this.name = "GoogleDriveRequestError";
   }
+}
+
+async function readLimitedBytes(response: Response, maxBytes: number, label: string) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error(`${label} exceeds the allowed size.`);
+  }
+
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) throw new Error(`${label} exceeds the allowed size.`);
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(`${label} exceeds the allowed size.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function escapeQueryValue(value: string) {
@@ -130,15 +170,16 @@ export class GoogleDriveClient {
     )[0] ?? null;
   }
 
-  async downloadBytes(fileId: string) {
+  async downloadBytes(fileId: string, maxBytes: number) {
     const response = await this.request(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
-    return new Uint8Array(await response.arrayBuffer());
+    return readLimitedBytes(response, maxBytes, "A Drive document");
   }
 
   async downloadManifest(fileId: string) {
     const response = await this.request(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
+    const bytes = await readLimitedBytes(response, MAX_MANIFEST_BYTES, "The Drive sync index");
     return {
-      content: await response.text(),
+      content: new TextDecoder().decode(bytes),
       etag: response.headers.get("etag"),
     };
   }
@@ -200,8 +241,9 @@ export class GoogleDriveClient {
       mimeType,
       appProperties: {
         berkasKind: "document",
-        berkasSchema: "1",
+        berkasSchema: "2",
         berkasDocumentId: documentId,
+        berkasEncryption: "aes-gcm-v2",
       },
     };
     const path = remoteFileId ? `/files/${encodeURIComponent(remoteFileId)}` : "/files";

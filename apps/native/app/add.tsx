@@ -18,7 +18,7 @@ import {
 
 import { AppIcon, type AppIconName, appIconSource } from "@/components/app-icon";
 import { MaterialCard, PageHeader, Screen, SectionHeading } from "@/components/screen";
-import { usePaperwork } from "@/contexts/paperwork-context";
+import { useProcesses } from "@/contexts/process-context";
 import { usePurchases } from "@/contexts/purchases-context";
 import { useVault } from "@/contexts/vault-context";
 import { FREE_DOCUMENT_LIMIT } from "@/lib/access-policy";
@@ -54,32 +54,40 @@ function defaultTitle(name: string) {
 }
 
 export default function AddDocumentScreen() {
-  const { runId, requirementId, preferredKind } = useLocalSearchParams<{
-    runId?: string;
-    requirementId?: string;
+  const { preferredKind, source, processId, requirementId } = useLocalSearchParams<{
     preferredKind?: string;
+    source?: string;
+    processId?: string;
+    requirementId?: string;
   }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { documents, addDocument } = useVault();
-  const { linkDocument } = usePaperwork();
+  const { documents, folders, addDocument } = useVault();
+  const { linkDocument } = useProcesses();
   const { isPro, isLoading: isPurchasesLoading } = usePurchases();
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [title, setTitle] = useState("");
   const initialKind = DOCUMENT_KINDS.find((item) => item === preferredKind) ?? "identity";
   const [kind, setKind] = useState<DocumentKind>(initialKind);
+  const [folderId, setFolderId] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<Date | null>(null);
   const [notes, setNotes] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isImporting, setIsImporting] = useState<ImportMethod | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const selectedSourceUri = useRef<string | null>(null);
+  const openedRequestedSource = useRef(false);
   const wide = width >= 760;
 
   useEffect(() => {
-    return () => {
-      if (selectedSourceUri.current) deleteTemporarySource(selectedSourceUri.current);
-    };
+    if (openedRequestedSource.current) return;
+    openedRequestedSource.current = true;
+    if (source === "scan") void scanPaper();
+    if (source === "file") void chooseFile();
+  }, [source]);
+
+  useEffect(() => () => {
+    if (selectedSourceUri.current) deleteTemporarySource(selectedSourceUri.current);
   }, []);
 
   function replaceSelectedFile(file: SelectedFile) {
@@ -104,7 +112,7 @@ export default function AddDocumentScreen() {
       const asset = result.assets[0];
       const mimeType = asset.mimeType ?? "application/octet-stream";
       const fileExtension = extensionFor(asset.name, mimeType);
-      stagedUri = stageTemporarySource(asset.uri, fileExtension);
+      stagedUri = await stageTemporarySource(asset.uri, fileExtension);
       if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
         deleteTemporarySource(stagedUri);
         stagedUri = null;
@@ -144,7 +152,7 @@ export default function AddDocumentScreen() {
       if (!uri) return;
 
       const fileName = `scan-${new Date().toISOString().slice(0, 10)}.jpg`;
-      stagedUri = stageTemporarySource(uri, ".jpg");
+      stagedUri = await stageTemporarySource(uri, ".jpg");
       if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
         deleteTemporarySource(stagedUri);
         stagedUri = null;
@@ -184,7 +192,14 @@ export default function AddDocumentScreen() {
     if (!isPro && documents.length >= FREE_DOCUMENT_LIMIT) {
       Alert.alert(
         "Free limit reached",
-        `${FREE_DOCUMENT_LIMIT} free documents. Upgrade in Settings for unlimited storage.`,
+        `${FREE_DOCUMENT_LIMIT} free documents are included. Berkas Pro makes your encrypted local vault unlimited.`,
+        [
+          { text: "Not now", style: "cancel" },
+          {
+            text: "Explore Pro",
+            onPress: () => router.push("/paywall"),
+          },
+        ],
       );
       return;
     }
@@ -202,6 +217,7 @@ export default function AddDocumentScreen() {
         ...selectedFile,
         title: title.trim(),
         kind,
+        folderId,
         expiresAt: expiry ? expiry.toISOString().slice(0, 10) : null,
         notes: notes.trim(),
       });
@@ -220,19 +236,19 @@ export default function AddDocumentScreen() {
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (runId && requirementId) {
+    if (processId && requirementId) {
       try {
-        await linkDocument(runId, requirementId, id);
-      } catch {
+        await linkDocument(processId, requirementId, id);
+        router.dismissTo({ pathname: "/process/[id]", params: { id: processId } });
+        return;
+      } catch (error) {
         Alert.alert(
-          "Document saved",
-          "Saved to the vault, but not linked to the plan.",
+          "Document saved, but not linked",
+          error instanceof Error ? error.message : "Open the process and choose this document.",
         );
       }
-      router.dismissTo({ pathname: "/paperwork/[id]", params: { id: runId } });
-    } else {
-      router.replace({ pathname: "/document/[id]", params: { id } });
     }
+    router.replace({ pathname: "/document/[id]", params: { id } });
   }
 
   const accessLabel = isPurchasesLoading
@@ -243,10 +259,7 @@ export default function AddDocumentScreen() {
 
   return (
     <Screen style={[styles.screenContent, wide ? styles.screenContentWide : null]}>
-      <PageHeader
-        eyebrow={runId ? "ADD TO PAPERWORK" : undefined}
-        title="Add document"
-      />
+      <PageHeader title="Add document" />
 
       <View style={styles.section}>
         <SectionHeading title="Choose a source" detail="PDF or image, up to 25 MB" />
@@ -343,6 +356,44 @@ export default function AddDocumentScreen() {
                       {item.label}
                     </Chip>
                   </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text variant="labelLarge" style={styles.fieldLabel}>Folder</Text>
+            <View style={styles.folderChoices} accessibilityRole="radiogroup">
+              <Chip
+                icon={appIconSource("folder-open")}
+                selected={folderId === null}
+                showSelectedCheck={false}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: folderId === null, disabled: isSaving }}
+                disabled={isSaving}
+                onPress={() => setFolderId(null)}
+                style={[styles.folderChip, folderId === null ? styles.kindChipSelected : null]}
+                textStyle={[styles.kindChipText, folderId === null ? styles.kindChipTextSelected : null]}
+              >
+                Unfiled
+              </Chip>
+              {folders.map((folder) => {
+                const selected = folderId === folder.id;
+                return (
+                  <Chip
+                    key={folder.id}
+                    icon={appIconSource("folder")}
+                    selected={selected}
+                    showSelectedCheck={false}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected, disabled: isSaving }}
+                    disabled={isSaving}
+                    onPress={() => setFolderId(folder.id)}
+                    style={[styles.folderChip, selected ? styles.kindChipSelected : null]}
+                    textStyle={[styles.kindChipText, selected ? styles.kindChipTextSelected : null]}
+                  >
+                    {folder.name}
+                  </Chip>
                 );
               })}
             </View>
@@ -544,6 +595,8 @@ const styles = StyleSheet.create({
   kindChipSelected: { backgroundColor: colors.signal },
   kindChipText: { color: colors.inkMuted, fontFamily: typography.label, fontSize: 12 },
   kindChipTextSelected: { color: colors.forestDark },
+  folderChoices: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  folderChip: { borderRadius: radii.full, backgroundColor: colors.surface },
   dateRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dateInput: {
     minHeight: 56,

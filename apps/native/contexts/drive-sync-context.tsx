@@ -20,6 +20,7 @@ import {
   DriveAccountMismatchError,
   syncDriveVault,
 } from "@/lib/drive-sync";
+import { getDriveRecoveryKeyHex } from "@/lib/drive-recovery-key";
 import { DRIVE_SCOPES } from "@/lib/google-drive-client";
 import type {
   GoogleDriveAccount,
@@ -55,7 +56,7 @@ function mapAccount(user: User): GoogleDriveAccount {
 export function DriveSyncProvider({ children }: PropsWithChildren) {
   const db = useSQLiteContext();
   const { isPro } = usePurchases();
-  const { documents, refresh } = useVault();
+  const { refresh } = useVault();
   const [account, setAccount] = useState<GoogleDriveAccount | null>(null);
   const [status, setStatus] = useState<SyncStatus>(isPro ? "signed-out" : "requires-pro");
   const [lastReport, setLastReport] = useState<SyncReport | null>(null);
@@ -96,6 +97,9 @@ export function DriveSyncProvider({ children }: PropsWithChildren) {
 
   async function performSync(activeAccount: GoogleDriveAccount) {
     if (!isPro) throw new Error("Berkas Pro is required for Drive sync.");
+    if (!(await getDriveRecoveryKeyHex())) {
+      throw new Error("Set up or enter your Drive recovery key in Settings before syncing.");
+    }
     setStatus("syncing");
     setError(null);
     try {
@@ -104,7 +108,6 @@ export function DriveSyncProvider({ children }: PropsWithChildren) {
         db,
         accessToken,
         accountId: activeAccount.id,
-        documents,
       });
       setLastReport(report);
       await refresh();

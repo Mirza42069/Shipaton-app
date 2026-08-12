@@ -29,8 +29,10 @@ export function expiryLabel(dateString: string | null) {
   if (!dateString) return { label: "No expiry", tone: "neutral" as const };
 
   const days = daysUntil(dateString);
-  if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, tone: "danger" as const };
+  if (days === -1) return { label: "Expired yesterday", tone: "danger" as const };
+  if (days < 0) return { label: `Expired ${Math.abs(days)} days ago`, tone: "danger" as const };
   if (days === 0) return { label: "Expires today", tone: "danger" as const };
+  if (days === 1) return { label: "1 day left", tone: "danger" as const };
   if (days <= 30) return { label: `${days} days left`, tone: "danger" as const };
   if (days <= 90) return { label: `${days} days left`, tone: "warning" as const };
   return { label: formatDate(dateString), tone: "neutral" as const };
