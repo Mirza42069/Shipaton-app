@@ -170,9 +170,9 @@ export class GoogleDriveClient {
     )[0] ?? null;
   }
 
-  async downloadBytes(fileId: string, maxBytes: number) {
+  async downloadBytes(fileId: string) {
     const response = await this.request(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
-    return readLimitedBytes(response, maxBytes, "A Drive document");
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   async downloadManifest(fileId: string) {

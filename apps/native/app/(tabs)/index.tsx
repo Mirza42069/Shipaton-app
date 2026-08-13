@@ -10,7 +10,7 @@ import { usePurchases } from "@/contexts/purchases-context";
 import { useVault } from "@/contexts/vault-context";
 import { daysUntil, expiryLabel } from "@/lib/date";
 import { colors, radii, spacing, typography } from "@/lib/theme";
-import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument } from "@/types/document";
+import { getDocumentKindDefinition, type VaultDocument } from "@/types/document";
 
 export default function TodayScreen() {
   const router = useRouter();
@@ -130,7 +130,7 @@ function AttentionRow({
   divided: boolean;
   onPress: () => void;
 }) {
-  const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
+  const kind = getDocumentKindDefinition(document.kind);
   const expiry = expiryLabel(document.expiresAt);
 
   return (

@@ -1,11 +1,9 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
-import DocumentScanner from "react-native-document-scanner-plugin";
 import {
   Button,
   Chip,
@@ -21,8 +19,9 @@ import { MaterialCard, PageHeader, Screen, SectionHeading } from "@/components/s
 import { useProcesses } from "@/contexts/process-context";
 import { usePurchases } from "@/contexts/purchases-context";
 import { useVault } from "@/contexts/vault-context";
-import { FREE_DOCUMENT_LIMIT } from "@/lib/access-policy";
-import { formatDate } from "@/lib/date";
+import { FREE_DOCUMENT_LIMIT, canAddDocument } from "@/lib/access-policy";
+import { formatDate, formatLocalDate } from "@/lib/date";
+import { scanDocument } from "@/lib/document-scanner";
 import { colors, radii, spacing, typography } from "@/lib/theme";
 import { deleteTemporarySource, stageTemporarySource } from "@/lib/vault-crypto";
 import {
@@ -38,8 +37,6 @@ type SelectedFile = Pick<
 >;
 
 type ImportMethod = "scan" | "file";
-
-const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
 function extensionFor(name: string, mimeType: string) {
   const match = name.match(/\.[a-z0-9]{1,8}$/i);
@@ -113,12 +110,6 @@ export default function AddDocumentScreen() {
       const mimeType = asset.mimeType ?? "application/octet-stream";
       const fileExtension = extensionFor(asset.name, mimeType);
       stagedUri = await stageTemporarySource(asset.uri, fileExtension);
-      if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
-        deleteTemporarySource(stagedUri);
-        stagedUri = null;
-        Alert.alert("File too large", "Choose a PDF or image under 25 MB.");
-        return;
-      }
       replaceSelectedFile({
         sourceUri: stagedUri,
         originalName: asset.name,
@@ -144,7 +135,7 @@ export default function AddDocumentScreen() {
     setIsImporting("scan");
     let stagedUri: string | null = null;
     try {
-      const result = await DocumentScanner.scanDocument({
+      const result = await scanDocument({
         maxNumDocuments: 1,
         croppedImageQuality: 92,
       });
@@ -153,12 +144,6 @@ export default function AddDocumentScreen() {
 
       const fileName = `scan-${new Date().toISOString().slice(0, 10)}.jpg`;
       stagedUri = await stageTemporarySource(uri, ".jpg");
-      if (new File(stagedUri).size > MAX_IMPORT_BYTES) {
-        deleteTemporarySource(stagedUri);
-        stagedUri = null;
-        Alert.alert("Scan too large", "Scan a document under 25 MB.");
-        return;
-      }
       replaceSelectedFile({
         sourceUri: stagedUri,
         originalName: fileName,
@@ -189,7 +174,7 @@ export default function AddDocumentScreen() {
       Alert.alert("Checking access", "Try again in a moment.");
       return;
     }
-    if (!isPro && documents.length >= FREE_DOCUMENT_LIMIT) {
+    if (!canAddDocument(documents.length, isPro)) {
       Alert.alert(
         "Free limit reached",
         `${FREE_DOCUMENT_LIMIT} free documents are included. Berkas Pro makes your encrypted local vault unlimited.`,
@@ -204,12 +189,6 @@ export default function AddDocumentScreen() {
       return;
     }
 
-    const source = new File(selectedFile.sourceUri);
-    if (source.size > MAX_IMPORT_BYTES) {
-      Alert.alert("File too large", "Choose a PDF or image under 25 MB.");
-      return;
-    }
-
     setIsSaving(true);
     let id: string;
     try {
@@ -218,7 +197,7 @@ export default function AddDocumentScreen() {
         title: title.trim(),
         kind,
         folderId,
-        expiresAt: expiry ? expiry.toISOString().slice(0, 10) : null,
+        expiresAt: expiry ? formatLocalDate(expiry) : null,
         notes: notes.trim(),
       });
     } catch (error) {
@@ -262,7 +241,7 @@ export default function AddDocumentScreen() {
       <PageHeader title="Add document" />
 
       <View style={styles.section}>
-        <SectionHeading title="Choose a source" detail="PDF or image, up to 25 MB" />
+        <SectionHeading title="Choose a source" detail="PDF or image · limited only by available device resources" />
         <View style={styles.sourceGrid}>
           <SourceButton
             icon="scan"
@@ -408,7 +387,7 @@ export default function AddDocumentScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={
                   expiry
-                    ? `Expiry date, ${formatDate(expiry.toISOString().slice(0, 10))}`
+                    ? `Expiry date, ${formatDate(formatLocalDate(expiry))}`
                     : "Expiry date, no expiry date set"
                 }
                 accessibilityHint="Opens the date picker"
@@ -424,7 +403,7 @@ export default function AddDocumentScreen() {
                   variant="bodyLarge"
                   style={[styles.dateText, !expiry ? styles.placeholder : null]}
                 >
-                  {expiry ? formatDate(expiry.toISOString().slice(0, 10)) : "No expiry date"}
+                  {expiry ? formatDate(formatLocalDate(expiry)) : "No expiry date"}
                 </Text>
                 <AppIcon name="chevron-down" size={18} color={colors.inkMuted} />
               </Pressable>

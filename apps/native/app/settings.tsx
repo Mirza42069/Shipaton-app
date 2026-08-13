@@ -354,7 +354,7 @@ export default function SettingsScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.brand}>Berkas</Text>
-        <Text style={styles.version}>Android · Shipaton 2026 · Version 1.0.0</Text>
+        <Text style={styles.version}>Android · Shipaton 2026 · Version 1.0.1</Text>
       </View>
 
       <Portal>

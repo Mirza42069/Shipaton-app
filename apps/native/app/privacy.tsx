@@ -16,7 +16,7 @@ const sections = [
   },
   {
     title: "Purchases",
-    copy: "If you use Berkas Pro, Samsung Galaxy Store and RevenueCat process purchase identifiers and subscription status. Berkas never receives your payment-card details.",
+    copy: "If you use Berkas Pro, Google Play and RevenueCat process purchase identifiers and entitlement status. Berkas never receives your payment-card details.",
   },
   {
     title: "Optional Google Drive sync",
@@ -94,7 +94,7 @@ export default function PrivacyScreen() {
           <AppIcon name="help" size={20} color={colors.forestDark} />
         </View>
         <View style={styles.contactCopy}>
-          <Text variant="titleMedium" style={styles.contactValue}>Galaxy Store listing</Text>
+          <Text variant="titleMedium" style={styles.contactValue}>Google Play listing</Text>
           <Text variant="bodySmall" style={styles.contactNote}>
             The verified seller support address is published with the app listing.
           </Text>

@@ -4,6 +4,7 @@ import {
   type PropsWithChildren,
   use,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -30,6 +31,8 @@ type VaultContextValue = {
   documents: VaultDocument[];
   folders: VaultFolder[];
   isLoading: boolean;
+  isReady: boolean;
+  loadError: string | null;
   addDocument: (input: NewVaultDocument) => Promise<string>;
   deleteDocument: (id: string) => Promise<void>;
   toggleFavorite: (id: string, currentValue: boolean) => Promise<void>;
@@ -48,12 +51,31 @@ export function VaultProvider({ children }: PropsWithChildren) {
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [folders, setFolders] = useState<VaultFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const refreshAttempt = useRef(0);
+  const readyRef = useRef(false);
 
   async function refresh() {
-    const [nextDocuments, nextFolders] = await Promise.all([listDocuments(db), listFolders(db)]);
-    setDocuments(nextDocuments);
-    setFolders(nextFolders);
-    setIsLoading(false);
+    const attempt = refreshAttempt.current + 1;
+    refreshAttempt.current = attempt;
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const [nextDocuments, nextFolders] = await Promise.all([listDocuments(db), listFolders(db)]);
+      if (attempt !== refreshAttempt.current) return;
+      setDocuments(nextDocuments);
+      setFolders(nextFolders);
+      setIsReady(true);
+      readyRef.current = true;
+    } catch (error) {
+      if (attempt === refreshAttempt.current && !readyRef.current) {
+        setLoadError("Berkas could not open the encrypted vault.");
+      }
+      if (readyRef.current) throw error;
+    } finally {
+      if (attempt === refreshAttempt.current) setIsLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -115,6 +137,8 @@ export function VaultProvider({ children }: PropsWithChildren) {
         documents,
         folders,
         isLoading,
+        isReady,
+        loadError,
         addDocument,
         deleteDocument: deleteDocumentById,
         toggleFavorite,

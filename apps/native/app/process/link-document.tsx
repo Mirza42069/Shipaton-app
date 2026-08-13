@@ -8,7 +8,7 @@ import { MaterialCard, PageHeader, Screen, SectionHeading } from "@/components/s
 import { useProcesses } from "@/contexts/process-context";
 import { useVault } from "@/contexts/vault-context";
 import { colors, radii, spacing, typography } from "@/lib/theme";
-import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument } from "@/types/document";
+import { DOCUMENT_KIND_DEFINITIONS, getDocumentKindDefinition, type VaultDocument } from "@/types/document";
 
 export default function LinkProcessDocumentScreen() {
   const { processId, requirementId } = useLocalSearchParams<{ processId: string; requirementId: string }>();
@@ -106,7 +106,7 @@ function DocumentSection({ title, documents, selectedId, disabled, onSelect }: {
       <SectionHeading title={title} />
       <MaterialCard>
         {documents.map((document, index) => {
-          const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
+          const kind = getDocumentKindDefinition(document.kind);
           const selected = document.id === selectedId;
           return (
             <Pressable

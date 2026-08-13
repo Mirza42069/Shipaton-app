@@ -1,70 +1,59 @@
 # Berkas Release Checklist
 
-## Accounts and External Setup
+## Current Build
 
-- [ ] Register `app.berkas.android` in Samsung Seller Portal.
-- [ ] Obtain commercial seller status.
-- [ ] Create `berkas_pro_monthly` at US $4.99/month.
-- [ ] Configure RevenueCat using `docs/revenuecat-galaxy.md`.
-- [ ] Configure Google OAuth and Drive using `docs/google-drive-setup.md`.
-- [ ] Create an Expo account and production signing credentials.
-- [ ] Publish `docs/privacy-policy.md` at a stable HTTPS URL.
-- [ ] Replace the privacy-policy contact placeholder.
+- [x] EAS project linked and managed upload signing created.
+- [x] Production RevenueCat `goog_` key configured in the EAS production environment.
+- [x] Version `1.0.0` (`versionCode 2`) built and uploaded to Play closed testing.
+- [x] Closed-testing countries and tester email list configured.
+- [ ] Complete the Advertising ID declaration: select **No**, because the app and AAB do not request `com.google.android.gms.permission.AD_ID`.
+- [ ] Submit the pending Play Console changes for review after quick checks pass.
 
-## Configuration
+Artifact details and certificate fingerprints are in `docs/production-build-2026-08-13.md`.
 
-- [x] Display name is Berkas.
-- [x] Package is `app.berkas.android`.
-- [x] Free limit is five local documents without login.
-- [x] Pro works locally without Google sign-in.
-- [x] Drive sign-in is optional and limited to Pro.
-- [x] Drive uses narrow `drive.file` and `drive.appdata` scopes.
-- [x] Target and compile SDK are 36; minimum SDK is 24.
-- [x] Cleartext network traffic and Android backup are disabled.
-- [x] Camera hardware is optional and broad storage permissions are blocked.
-- [ ] Configure `EXPO_PUBLIC_REVENUECAT_GALAXY_API_KEY`.
-- [ ] Register debug and production signing SHA-1 values in Google Cloud.
+## Next Closed-Test Build
 
-## Build
+- [x] Set app version to `1.0.1`; EAS must assign a `versionCode` greater than `2`.
+- [x] Set Berkas Free to 10 documents and remove the fixed 25 MB document cap.
+- [x] Update the app for one-time product `berkas_pro_lifetime` in RevenueCat package `$rc_lifetime`.
+- [ ] Remote Android version state is currently uninitialized. Run `bunx eas build:version:set --platform android --profile production`, enter current Play version code `2`, then confirm `bunx eas build:version:get --platform android --profile production` reports `2`. The production profile will auto-increment the next build to `3`.
+- [ ] Build and upload version `1.0.1` only after the lifetime product and offering are active.
+
+## Required Before Testing
+
+- [ ] Finish Play developer identity verification if still pending.
+- [ ] Publish `docs/privacy-policy.md` at a stable HTTPS URL and replace its contact placeholder.
+- [ ] Add the public support email in Play Store settings.
+- [ ] Complete Play Console App content forms: Data safety, content rating, target audience, app access, ads (**No**), Financial features (**No**), Health apps (**No**), and privacy policy.
+- [ ] Create and activate one-time Buy product `berkas_pro_lifetime` with purchase option `buy` and US $9.99 pricing.
+- [ ] Mark `berkas_pro_lifetime` non-consumable in RevenueCat, attach it to `pro`, and add it to `$rc_lifetime` in `default`.
+- [ ] Finish RevenueCat setup in `docs/revenuecat-google-play.md`.
+- [ ] Finish Google OAuth setup in `docs/google-drive-setup.md` and register every Play app-signing SHA-1 shown by Play Console.
+
+## Closed-Test Validation
+
+- [ ] Install through the Play closed-testing opt-in link using a license tester account.
+- [ ] Cold start without Metro, including once in airplane mode.
+- [ ] Add 10 documents and confirm the eleventh requires Pro.
+- [ ] Import and synchronize a document larger than 25 MB on a device with sufficient storage and memory.
+- [ ] Test image/PDF import, scan, search, reminders, biometrics, screenshot blocking, sharing, rotation, and permission denial.
+- [ ] Make and restore the one-time Pro purchase; confirm unlimited local documents work without Drive sign-in.
+- [ ] Confirm the Drive disclosure appears before sign-in and only opaque `.berkas` backups are uploaded.
+- [ ] Restore with the recovery key; confirm another Google account is rejected.
+- [ ] Confirm remote deletion moves the backup to trash and disconnect/refund/revocation preserves local and Drive files.
+- [ ] Confirm the listing, screenshots, price, and privacy policy match the submitted binary.
+
+For personal Play accounts subject to the production-access requirement, keep at least 12 testers opted in continuously for 14 days, collect feedback, then apply for production access.
+
+## Build Commands
+
+Run from `apps/native`:
 
 ```powershell
 bun run check-types
+bun test
 bunx expo-doctor
-bunx expo prebuild --clean --platform android
-eas build --platform android --profile preview
-eas build --platform android --profile production
+bunx eas build --platform android --profile production
 ```
 
-The generated Android project is tracked. Run Expo Prebuild after every package, plugin, or native configuration change and review the generated diff.
-
-## Local Device Validation
-
-- [ ] Install Berkas on the Samsung Galaxy S21 FE.
-- [ ] Confirm package `app.berkas.android` and launcher label Berkas.
-- [ ] Cold start in airplane mode without a login prompt.
-- [ ] Add five synthetic documents and verify the sixth is blocked.
-- [ ] Reopen and decrypt imported image/PDF files.
-- [ ] Test search, expiry notifications, biometric lock, screenshot blocking, sharing, rotation, and split-screen.
-- [ ] Confirm denied camera, notification, and biometric permissions do not crash.
-
-## Subscription and Drive Validation
-
-- [ ] Purchase Pro without Google sign-in through a Samsung licensed tester.
-- [ ] Confirm a sixth document is allowed with Pro.
-- [ ] Confirm Drive disclosure appears before Google sign-in.
-- [ ] Connect a Google OAuth test account and sync a PDF and image.
-- [ ] Confirm `My Drive/Berkas` contains only opaque `.berkas` backups.
-- [ ] Restore on another test device using the saved recovery key.
-- [ ] Restore on a second device and confirm local encryption.
-- [ ] Delete in Berkas and verify the Drive copy moves to trash after sync.
-- [ ] Verify a different Google account is blocked from receiving the bound vault.
-- [ ] Disconnect Google and verify local documents remain.
-- [ ] Expire Pro and verify sync pauses without deleting local or Drive files.
-
-## Seller Portal Submission
-
-- [ ] Use `docs/galaxy-store-listing.md` for matching metadata and screenshots.
-- [ ] Include the United States for Shipaton judging.
-- [ ] Complete Data Safety for local files, Google account information, encrypted Drive backups, Samsung IAP, RevenueCat, and Google ML Kit.
-- [ ] Provide Samsung licensed-test and Google OAuth test instructions to reviewers.
-- [ ] Verify the app name, package, icon, description, screenshots, subscription price, and privacy policy match the submitted binary.
+The Android project is tracked. After a native dependency or plugin change, run `bunx expo prebuild --clean --platform android` and review the generated diff before rebuilding.

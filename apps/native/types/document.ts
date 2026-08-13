@@ -62,3 +62,12 @@ export const DOCUMENT_KIND_DEFINITIONS: DocumentKindDefinition[] = [
   { value: "work", label: "Work", shortLabel: "WORK", icon: "work" },
   { value: "other", label: "Other", shortLabel: "OTHER", icon: "other" },
 ];
+
+export function normalizeDocumentKind(value: string): DocumentKind {
+  return DOCUMENT_KINDS.find((kind) => kind === value) ?? "other";
+}
+
+export function getDocumentKindDefinition(value: string) {
+  const normalized = normalizeDocumentKind(value);
+  return DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === normalized)!;
+}

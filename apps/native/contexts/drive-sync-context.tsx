@@ -121,7 +121,7 @@ export function DriveSyncProvider({ children }: PropsWithChildren) {
   }
 
   async function connect() {
-    if (!isPro) throw new Error("Subscribe to Berkas Pro before enabling Drive sync.");
+    if (!isPro) throw new Error("Unlock Berkas Pro before enabling Drive sync.");
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     const response = await GoogleSignin.signIn();
     if (!isSuccessResponse(response)) return;

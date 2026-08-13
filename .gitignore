@@ -15,6 +15,10 @@ apps/web/src/routeTree.gen.ts
 .env
 .env*.local
 
+# Private service-account credentials
+*-service-account*.json
+berkas-505410-f8adfe18308d.json
+
 # IDEs and editors
 .vscode/*
 !.vscode/settings.json

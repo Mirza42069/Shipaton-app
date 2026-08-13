@@ -13,7 +13,7 @@ import { useVault } from "@/contexts/vault-context";
 import { expiryLabel, formatDate, formatFileSize } from "@/lib/date";
 import { colors, radii, spacing, typography } from "@/lib/theme";
 import { decryptForPreview, deletePreviewFile } from "@/lib/vault-crypto";
-import { DOCUMENT_KIND_DEFINITIONS } from "@/types/document";
+import { getDocumentKindDefinition } from "@/types/document";
 
 export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -99,7 +99,7 @@ export default function DocumentDetailScreen() {
     );
   }
 
-  const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
+  const kind = getDocumentKindDefinition(document.kind);
   const expiry = expiryLabel(document.expiresAt);
   const currentDocument = document;
   const folder = folders.find((item) => item.id === document.folderId) ?? null;

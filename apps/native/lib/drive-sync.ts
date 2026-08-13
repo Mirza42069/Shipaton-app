@@ -46,8 +46,6 @@ import type {
   SyncReport,
 } from "@/types/sync";
 
-const MAX_SYNC_FILE_BYTES = 25 * 1024 * 1024;
-
 const legacyManifestDocumentSchema = z.object({
   id: z.string().regex(DOCUMENT_ID_PATTERN),
   title: z.string(),
@@ -55,7 +53,7 @@ const legacyManifestDocumentSchema = z.object({
   originalName: z.string(),
   mimeType: z.string(),
   fileExtension: z.string().regex(DOCUMENT_FILE_EXTENSION_PATTERN),
-  fileSize: z.number().nonnegative().max(MAX_SYNC_FILE_BYTES),
+  fileSize: z.number().nonnegative(),
   expiresAt: z.string().nullable(),
   notes: z.string(),
   isFavorite: z.boolean(),
@@ -308,7 +306,7 @@ async function syncDriveVaultLocked({
       ? referencedFile
       : orphan;
     if (!local && remoteFile && !remoteFile.trashed) {
-      const bytes = await client.downloadBytes(remoteFile.id, MAX_SYNC_FILE_BYTES + 64);
+      const bytes = await client.downloadBytes(remoteFile.id);
       const encrypted = remoteFile.appProperties?.berkasEncryption?.startsWith("aes-gcm-") ||
         isEncryptedDriveFile(bytes);
       const sourceUri = encrypted

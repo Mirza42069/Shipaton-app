@@ -5,11 +5,11 @@ import { Surface, Text } from "react-native-paper";
 import { AppIcon } from "@/components/app-icon";
 import { expiryLabel, formatFileSize } from "@/lib/date";
 import { colors, radii, spacing, typography } from "@/lib/theme";
-import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument } from "@/types/document";
+import { getDocumentKindDefinition, type VaultDocument } from "@/types/document";
 
 export function DocumentCard({ document, compact = false }: { document: VaultDocument; compact?: boolean }) {
   const router = useRouter();
-  const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
+  const kind = getDocumentKindDefinition(document.kind);
   const expiry = expiryLabel(document.expiresAt);
 
   return (

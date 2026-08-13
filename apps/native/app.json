@@ -3,15 +3,15 @@
     "userInterfaceStyle": "light",
     "orientation": "default",
     "name": "Berkas",
-    "slug": "berkas",
-    "version": "1.0.0",
+    "slug": "mirza123",
+    "version": "1.0.1",
     "icon": "./assets/images/icon.png",
     "web": {
       "bundler": "metro"
     },
     "android": {
       "package": "app.berkas.android",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#162119",
@@ -44,7 +44,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.USE_BIOMETRIC"
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "plugins": [
@@ -92,11 +93,17 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-galaxy-optimizations.cjs"
+      "./plugins/with-android-hardening.cjs"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3c5d5315-4bb1-43ea-93fb-946cc53a7e99"
+      }
+    },
+    "owner": "hyperfernos-team"
   }
 }

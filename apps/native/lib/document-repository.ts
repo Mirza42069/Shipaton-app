@@ -1,14 +1,14 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import { FREE_DOCUMENT_LIMIT, FreeDocumentLimitError } from "@/lib/access-policy";
+import { FreeDocumentLimitError, canAddDocument } from "@/lib/access-policy";
 import { unlockDatabase } from "@/lib/database";
 import { deleteTemporarySource, deleteVaultFile, encryptIntoVault } from "@/lib/vault-crypto";
-import type { DocumentKind, NewVaultDocument, VaultDocument } from "@/types/document";
+import { normalizeDocumentKind, type NewVaultDocument, type VaultDocument } from "@/types/document";
 
 type DocumentRow = {
   id: string;
   title: string;
-  kind: DocumentKind;
+  kind: string;
   folder_id: string | null;
   encrypted_uri: string;
   original_name: string;
@@ -36,7 +36,7 @@ function rowToDocument(row: DocumentRow): VaultDocument {
   return {
     id: row.id,
     title: row.title,
-    kind: row.kind,
+    kind: normalizeDocumentKind(row.kind),
     folderId: row.folder_id,
     encryptedUri: row.encrypted_uri,
     originalName: row.original_name,
@@ -84,7 +84,7 @@ export async function createDocument(
         const count = await transaction.getFirstAsync<{ count: number }>(
           "SELECT COUNT(*) AS count FROM documents",
         );
-        if ((count?.count ?? 0) >= FREE_DOCUMENT_LIMIT) throw new FreeDocumentLimitError();
+        if (!canAddDocument(count?.count ?? 0, false)) throw new FreeDocumentLimitError();
       }
 
       await transaction.runAsync(

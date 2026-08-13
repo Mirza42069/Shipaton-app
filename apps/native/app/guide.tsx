@@ -46,7 +46,7 @@ const chapters: Chapter[] = [
   {
     title: "Pro and Google Drive",
     icon: "cloud",
-    points: ["Free includes five local documents.", "Pro unlocks unlimited local documents.", "Optional Drive backups are encrypted before upload and require your recovery key to restore."],
+    points: ["Free includes 10 local documents with no fixed file-size limit.", "A one-time Pro purchase unlocks unlimited local documents.", "Optional Drive backups are encrypted before upload and require your recovery key to restore."],
   },
 ];
 

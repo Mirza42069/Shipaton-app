@@ -16,6 +16,8 @@ type SecurityContextValue = {
   biometricEnabled: boolean;
   isLocked: boolean;
   isLoading: boolean;
+  initializationError: string | null;
+  retryInitialization: () => void;
   setBiometricEnabled: (enabled: boolean) => Promise<boolean>;
   unlock: () => Promise<boolean>;
   runWithAutoLockPaused: <T>(action: () => Promise<T>) => Promise<T>;
@@ -27,6 +29,8 @@ export function SecurityProvider({ children }: PropsWithChildren) {
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [initializationAttempt, setInitializationAttempt] = useState(0);
   const autoLockPaused = useRef(false);
 
   async function authenticate() {
@@ -44,19 +48,26 @@ export function SecurityProvider({ children }: PropsWithChildren) {
     let mounted = true;
 
     async function loadSetting() {
-      const enabled = (await SecureStore.getItemAsync(BIOMETRIC_SETTING_KEY)) === "true";
-      if (!mounted) return;
-      setBiometricEnabledState(enabled);
-      setIsLocked(enabled);
-      setIsLoading(false);
-      if (enabled) await authenticate();
+      try {
+        const enabled = (await SecureStore.getItemAsync(BIOMETRIC_SETTING_KEY)) === "true";
+        if (!mounted) return;
+        setInitializationError(null);
+        setBiometricEnabledState(enabled);
+        setIsLocked(enabled);
+        setIsLoading(false);
+        if (enabled) await authenticate();
+      } catch {
+        if (!mounted) return;
+        setInitializationError("Berkas could not access Android secure storage.");
+        setIsLoading(false);
+      }
     }
 
     void loadSetting();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [initializationAttempt]);
 
   useEffect(() => {
     function handleAppState(state: AppStateStatus) {
@@ -100,6 +111,11 @@ export function SecurityProvider({ children }: PropsWithChildren) {
         biometricEnabled,
         isLocked,
         isLoading,
+        initializationError,
+        retryInitialization: () => {
+          setIsLoading(true);
+          setInitializationAttempt((attempt) => attempt + 1);
+        },
         setBiometricEnabled,
         unlock: authenticate,
         runWithAutoLockPaused,

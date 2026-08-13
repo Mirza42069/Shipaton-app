@@ -24,7 +24,7 @@ Encrypted Drive backups use a randomly generated recovery key stored in Android 
 
 The selected Google account identifier, email address, display name, access tokens, and authorization status may be processed on the device to operate and display the connection. Berkas does not send Google credentials to a Berkas server. OAuth tokens are managed by Google Play services and the Google sign-in library.
 
-Disconnecting Google stops synchronization but does not delete local documents or existing Drive copies. Users can delete Drive files in Berkas or Google Drive and can revoke Berkas access from Google Account permissions. Subscription expiry pauses synchronization without deleting either local or Drive copies.
+Disconnecting Google stops synchronization but does not delete local documents or existing Drive copies. Users can delete Drive files in Berkas or Google Drive and can revoke Berkas access from Google Account permissions. A refunded, revoked, or unavailable Pro entitlement pauses synchronization without deleting either local or Drive copies.
 
 ## Processes
 
@@ -42,9 +42,9 @@ Expiry reminders are scheduled locally through Android notifications. Reminder t
 
 ## Purchases
 
-Berkas uses Samsung In-App Purchase and RevenueCat for Berkas Pro. These providers may process anonymous app user identifiers, products, entitlements, receipts, purchase status, app version, platform, and diagnostics required to validate and restore purchases. Automatic RevenueCat device identifier collection is disabled.
+Berkas uses Google Play Billing and RevenueCat for Berkas Pro. These providers may process anonymous app user identifiers, products, entitlements, receipts, purchase status, app version, platform, and diagnostics required to validate and restore purchases. Automatic RevenueCat device identifier collection is disabled.
 
-Samsung processes payment details; Berkas does not receive payment-card information. RevenueCat's privacy policy is at https://www.revenuecat.com/privacy/ and Samsung's privacy policy is at https://www.samsung.com/privacy/.
+Google Play processes payment details; Berkas does not receive payment-card information. RevenueCat's privacy policy is at https://www.revenuecat.com/privacy/ and Google's privacy policy is at https://policies.google.com/privacy.
 
 ## Analytics and Advertising
 
@@ -56,4 +56,4 @@ Berkas is not directed to children under 13. We do not knowingly collect persona
 
 ## Contact
 
-Before publication, replace this paragraph with the seller's public support email and mailing address. These details must match Galaxy Store and the Google OAuth consent screen.
+Before publication, replace this paragraph with the developer's public support email and mailing address. These details must match Google Play and the Google OAuth consent screen.

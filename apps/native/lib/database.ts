@@ -143,4 +143,5 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       }
     });
   }
+
 }

@@ -9,8 +9,9 @@ def releaseKeyAlias = System.getenv("BERKAS_RELEASE_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("BERKAS_RELEASE_KEY_PASSWORD")
 def releaseSigningValues = [releaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
 def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+def easBuild = System.getenv("EAS_BUILD") in ["1", "true"]
 
-if (releaseTaskRequested && releaseSigningValues.any { !it }) {
+if (releaseTaskRequested && !easBuild && releaseSigningValues.any { !it }) {
     throw new GradleException("Release signing requires BERKAS_RELEASE_STORE_FILE, BERKAS_RELEASE_STORE_PASSWORD, BERKAS_RELEASE_KEY_ALIAS, and BERKAS_RELEASE_KEY_PASSWORD.")
 }
 
@@ -103,8 +104,8 @@ android {
         applicationId 'app.berkas.android'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 2
+        versionName "1.0.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -115,7 +116,6 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-
         release {
             if (releaseSigningValues.every { it }) {
                 storeFile file(releaseStoreFilePath)
@@ -175,6 +175,9 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    configurations.configureEach {
+        exclude group: "com.revenuecat.purchases", module: "purchases-store-amazon"
+    }
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

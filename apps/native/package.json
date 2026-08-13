@@ -1,6 +1,6 @@
 {
   "name": "native",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -10,7 +10,8 @@
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
     "web": "expo start --web",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "0.4.2",
@@ -49,7 +50,6 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-paper": "5.15.3",
     "react-native-purchases": "10.7.0",
-    "react-native-purchases-store-galaxy": "10.7.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",

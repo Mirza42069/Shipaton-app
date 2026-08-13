@@ -63,8 +63,13 @@ export default function PaywallScreen() {
     if (isBusy) return;
     setIsRestoring(true);
     try {
-      await restore();
-      Alert.alert("Purchases checked", "Your Galaxy Store purchases have been restored.");
+      const restoredPro = await restore();
+      Alert.alert(
+        "Purchases checked",
+        restoredPro
+          ? "Your Google Play purchase has been restored."
+          : "No active Berkas Pro purchase was found for this Google Play account.",
+      );
     } catch {
       Alert.alert("Restore failed", "Check your connection and try again.");
     } finally {
@@ -104,7 +109,7 @@ export default function PaywallScreen() {
           <Text style={styles.lead}>
             {isPro
               ? "Unlimited local documents are unlocked. Google Drive remains optional."
-              : "Upgrade the local-first vault you already trust. No Berkas login, no advertising, no tracking."}
+              : "Free includes 10 local documents. Pay once to unlock unlimited documents and optional Drive sync."}
           </Text>
         </View>
 
@@ -133,7 +138,7 @@ export default function PaywallScreen() {
         ) : isOfferingsLoading ? (
           <View style={styles.offerState} accessibilityLiveRegion="polite">
             <ActivityIndicator size={24} color={colors.forest} />
-            <Text style={styles.offerStateText}>Loading your Galaxy Store offer...</Text>
+            <Text style={styles.offerStateText}>Loading your Google Play offer...</Text>
           </View>
         ) : offeringsError ? (
           <View style={styles.offerState} accessibilityRole="alert">
@@ -152,26 +157,26 @@ export default function PaywallScreen() {
                 icon={appIconSource("upgrade")}
                 loading={purchasingId === item.identifier}
                 disabled={isBusy}
-                accessibilityLabel={`Get Berkas Pro for ${item.product.priceString}`}
+                accessibilityLabel={`Unlock lifetime Berkas Pro for a one-time payment of ${item.product.priceString}`}
                 onPress={() => void buy(index)}
                 contentStyle={styles.purchaseContent}
                 labelStyle={styles.purchaseLabel}
                 style={styles.purchaseButton}
               >
                 {purchasingId === item.identifier
-                  ? "Opening Galaxy Store..."
-                  : `Get Pro · ${item.product.priceString} monthly`}
+                  ? "Opening Google Play..."
+                  : `Unlock Pro forever · ${item.product.priceString}`}
               </Button>
             ))}
             <Text style={styles.renewalCopy}>
-              Recurring monthly subscription. Price and renewal are handled by Samsung Galaxy Store.
+              One-time purchase. No subscription. Price and payment are handled by Google Play.
             </Text>
           </View>
         ) : (
           <View style={styles.offerState}>
             <AppIcon name="tools" size={23} color={colors.forest} />
             <Text style={styles.offerStateText}>
-              The Galaxy Store offer will appear after Samsung and RevenueCat finish connecting this app.
+              The Google Play offer will appear after Play Console and RevenueCat finish connecting this app.
             </Text>
           </View>
         )}

@@ -10,7 +10,7 @@ import { PageHeader, Screen } from "@/components/screen";
 import { useVault } from "@/contexts/vault-context";
 import { formatFileSize } from "@/lib/date";
 import { colors, radii, spacing, typography } from "@/lib/theme";
-import { DOCUMENT_KIND_DEFINITIONS, type VaultDocument, type VaultFolder } from "@/types/document";
+import { getDocumentKindDefinition, type VaultDocument, type VaultFolder } from "@/types/document";
 
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
@@ -28,8 +28,8 @@ export default function VaultScreen() {
     .filter((document) => {
       if (folderId && document.folderId !== folderId) return false;
       if (!deferredQuery) return true;
-      const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind);
-      return [document.title, document.originalName, document.notes, kind?.label ?? ""]
+      const kind = getDocumentKindDefinition(document.kind);
+      return [document.title, document.originalName, document.notes, kind.label]
         .some((value) => value.toLowerCase().includes(deferredQuery));
     })
     .slice()
@@ -210,7 +210,7 @@ function FolderTile({ folder, count, onPress }: { folder: VaultFolder; count: nu
 }
 
 function FileRow({ document, onPress }: { document: VaultDocument; onPress: () => void }) {
-  const kind = DOCUMENT_KIND_DEFINITIONS.find((item) => item.value === document.kind)!;
+  const kind = getDocumentKindDefinition(document.kind);
   const extension = document.fileExtension.replace(".", "").toUpperCase() || "FILE";
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${document.title}, ${kind.label}`} onPress={onPress} style={({ pressed }) => [styles.fileRow, pressed ? styles.pressed : null]}>

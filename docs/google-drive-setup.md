@@ -10,33 +10,26 @@ Berkas uses Google sign-in only when a Pro user enables optional Drive sync. It 
 4. Add `https://www.googleapis.com/auth/drive.file` and `https://www.googleapis.com/auth/drive.appdata`.
 5. Add test Google accounts while the consent screen is in testing mode.
 6. Create an Android OAuth client for package `app.berkas.android` and the debug signing SHA-1.
-7. Create another Android OAuth client for package `app.berkas.android` and the final production signing SHA-1.
+7. Create Android OAuth clients for every Play app-signing SHA-1 shown under Play Console > App integrity. The EAS upload certificate is not the certificate Google uses for Play-installed builds.
 8. Complete Google's basic OAuth verification before public release.
 
 The legacy native Google sign-in adapter does not require a client secret or server auth code. Never place an OAuth client secret in the app.
 
-To print the local APK signing certificate:
-
-```powershell
-$env:JAVA_HOME='C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot'
-& "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0\apksigner.bat" verify --print-certs android\app\build\outputs\apk\release\app-release.apk
-```
-
 ## Sync Behavior
 
-- Visible files: `My Drive/Berkas/<document title>.<extension>`
+- Visible files: opaque `My Drive/Berkas/<document ID>.berkas` backups
 - Hidden file: encrypted `berkas-index.json` in Google Drive application data
 - Uploads use resumable Drive sessions.
 - Downloads are immediately encrypted into the local Berkas vault.
 - Deleting a document in Berkas moves its Drive copy to trash at the next sync.
-- Disconnecting or losing Pro pauses sync and leaves Drive files intact.
+- Disconnecting Google or losing a valid Pro entitlement pauses sync and leaves Drive files intact.
 - A local vault binds to its first connected Google account; a different account is rejected to prevent accidental disclosure.
 - Files manually added to the Drive folder are not automatically imported because Berkas intentionally uses the narrow `drive.file` scope.
 
 ## Configuration Test
 
 1. Build and sign the exact `app.berkas.android` package registered in Google Cloud.
-2. Activate Berkas Pro through a Samsung licensed tester.
+2. Activate Berkas Pro through a Google Play closed-track license tester.
 3. Open Settings and tap Connect Google Drive.
 4. Save the recovery key and confirm the encrypted-backup disclosure appears before Google sign-in.
 5. Sync a synthetic PDF and image.

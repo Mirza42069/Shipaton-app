@@ -48,6 +48,18 @@ function findGradleBlock(contents, name, from = 0, to = contents.length) {
 function withReleaseSigning(config) {
   return withAppBuildGradle(config, (androidConfig) => {
     let contents = androidConfig.modResults.contents;
+    if (!contents.includes('exclude group: "com.revenuecat.purchases", module: "purchases-store-amazon"')) {
+      const reactNativeDependency = /implementation\(["']com\.facebook\.react:react-android["']\)\r?\n/;
+      if (!reactNativeDependency.test(contents)) throw new Error("Could not remove the Amazon billing backend.");
+      contents = contents.replace(
+        reactNativeDependency,
+        (match) => `${match}    configurations.configureEach {
+        exclude group: "com.revenuecat.purchases", module: "purchases-store-amazon"
+    }
+`,
+      );
+    }
+
     if (!contents.includes("def releaseStoreFilePath =")) {
       const projectRoot = /def projectRoot = .*\r?\n/;
       if (!projectRoot.test(contents)) throw new Error("Could not add Berkas release signing variables.");
@@ -57,8 +69,9 @@ def releaseKeyAlias = System.getenv("BERKAS_RELEASE_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("BERKAS_RELEASE_KEY_PASSWORD")
 def releaseSigningValues = [releaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
 def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+def easBuild = System.getenv("EAS_BUILD") in ["1", "true"]
 
-if (releaseTaskRequested && releaseSigningValues.any { !it }) {
+if (releaseTaskRequested && !easBuild && releaseSigningValues.any { !it }) {
     throw new GradleException("Release signing requires BERKAS_RELEASE_STORE_FILE, BERKAS_RELEASE_STORE_PASSWORD, BERKAS_RELEASE_KEY_ALIAS, and BERKAS_RELEASE_KEY_PASSWORD.")
 }
 
@@ -68,16 +81,17 @@ if (releaseTaskRequested && releaseSigningValues.any { !it }) {
     let signingConfigs = findGradleBlock(contents, "signingConfigs");
     if (!signingConfigs) throw new Error("Could not find Android signing configs.");
     if (!findGradleBlock(contents, "release", signingConfigs.openingBrace + 1, signingConfigs.end)) {
-      const releaseSigning = `
-        release {
+      const closingLineStart = contents.lastIndexOf("\n", signingConfigs.end - 1) + 1;
+      const releaseSigning = `        release {
             if (releaseSigningValues.every { it }) {
                 storeFile file(releaseStoreFilePath)
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
             }
-        }`;
-      contents = contents.slice(0, signingConfigs.end - 1) + releaseSigning + contents.slice(signingConfigs.end - 1);
+        }
+`;
+      contents = contents.slice(0, closingLineStart) + releaseSigning + contents.slice(closingLineStart);
     }
 
     const buildTypes = findGradleBlock(contents, "buildTypes");
@@ -114,7 +128,7 @@ function withBackupRules(config) {
   }]);
 }
 
-module.exports = function withGalaxyOptimizations(config) {
+module.exports = function withAndroidHardening(config) {
   config = withReleaseSigning(config);
   config = withBackupRules(config);
   config = withAndroidManifest(config, (androidConfig) => {

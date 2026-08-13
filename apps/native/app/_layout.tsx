@@ -11,7 +11,7 @@ import { usePreventScreenCapture } from "expo-screen-capture";
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { PaperProvider } from "react-native-paper";
@@ -22,7 +22,7 @@ import { DriveSyncProvider } from "@/contexts/drive-sync-context";
 import { ProcessProvider } from "@/contexts/process-context";
 import { PurchasesProvider } from "@/contexts/purchases-context";
 import { SecurityProvider, useSecurity } from "@/contexts/security-context";
-import { VaultProvider } from "@/contexts/vault-context";
+import { VaultProvider, useVault } from "@/contexts/vault-context";
 import { initializeDatabase } from "@/lib/database";
 import { clearDriveBackupFiles } from "@/lib/drive-backup-crypto";
 import { configureNotifications } from "@/lib/notifications";
@@ -36,13 +36,22 @@ export const unstable_settings = {
 void SplashScreen.preventAutoHideAsync();
 
 function LockGate({ children }: { children: React.ReactNode }) {
-  const { isLoading, isLocked, unlock } = useSecurity();
+  const { isLoading, isLocked, initializationError, retryInitialization, unlock } = useSecurity();
 
   useEffect(() => {
     if (isLocked) clearPreviewFiles();
   }, [isLocked]);
 
   if (isLoading) return <View style={styles.loading} />;
+  if (initializationError) {
+    return (
+      <StartupFailure
+        title="Secure storage unavailable"
+        detail={`${initializationError} Unlock the device and try again.`}
+        onRetry={retryInitialization}
+      />
+    );
+  }
   if (!isLocked) return children;
 
   return (
@@ -59,22 +68,101 @@ function LockGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+function StartupFailure({ title, detail, onRetry }: { title: string; detail: string; onRetry: () => void }) {
+  return (
+    <View style={styles.locked}>
+      <View style={styles.lockIcon}>
+        <AppIcon name="alert" size={31} color={colors.forestDark} />
+      </View>
+      <Text style={styles.lockTitle}>{title}</Text>
+      <Text style={styles.lockCopy}>{detail}</Text>
+      <View style={styles.unlockButton}>
+        <ActionButton onPress={onRetry}>Try again</ActionButton>
+      </View>
+    </View>
+  );
+}
+
+class ApplicationBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null; attempt: number }
+> {
+  state = { error: null as Error | null, attempt: 0 };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(_error: Error, _info: ErrorInfo) {}
+
+  retry = () => this.setState(({ attempt }) => ({ error: null, attempt: attempt + 1 }));
+
+  render() {
+    if (this.state.error) {
+      return (
+        <StartupFailure
+          title="Berkas could not start"
+          detail="An unexpected problem stopped the app from opening. Your files have not been deleted."
+          onRetry={this.retry}
+        />
+      );
+    }
+    return <View key={this.state.attempt} style={styles.root}>{this.props.children}</View>;
+  }
+}
+
+function VaultGate({ children }: { children: ReactNode }) {
+  const { isLoading, isReady, loadError, refresh } = useVault();
+  if (!isReady) {
+    if (isLoading) return <View style={styles.loading} />;
+    return (
+      <StartupFailure
+        title="Vault did not open"
+        detail={`${loadError ?? "Berkas could not open the encrypted vault."} Your files have not been deleted.`}
+        onRetry={() => void refresh()}
+      />
+    );
+  }
+  return children;
+}
+
 function RootStack() {
   usePreventScreenCapture("vault-content");
+  const [cacheState, setCacheState] = useState<"loading" | "ready" | "error">("loading");
+  const [cacheAttempt, setCacheAttempt] = useState(0);
 
   useEffect(() => {
-    clearPreviewFiles();
-    clearImportFiles();
-    clearDriveBackupFiles();
-    void configureNotifications();
-  }, []);
+    setCacheState("loading");
+    try {
+      clearPreviewFiles();
+      clearImportFiles();
+      clearDriveBackupFiles();
+      setCacheState("ready");
+    } catch {
+      setCacheState("error");
+    }
+    void configureNotifications().catch(() => undefined);
+  }, [cacheAttempt]);
+
+  if (cacheState === "loading") return <View style={styles.loading} />;
+  if (cacheState === "error") {
+    return (
+      <StartupFailure
+        title="Private cache unavailable"
+        detail="Berkas could not clear temporary document copies. Unlock the device and try again."
+        onRetry={() => setCacheAttempt((attempt) => attempt + 1)}
+      />
+    );
+  }
 
   return (
-    <SQLiteProvider databaseName="berkas.db" onInit={initializeDatabase}>
-      <VaultProvider>
-        <ProcessProvider>
-          <DriveSyncProvider>
-            <LockGate>
+    <ApplicationBoundary>
+      <SQLiteProvider databaseName="berkas.db" onInit={initializeDatabase}>
+        <VaultProvider>
+          <VaultGate>
+            <ProcessProvider>
+              <DriveSyncProvider>
+                <LockGate>
               <Stack
                 screenOptions={{
                   contentStyle: { backgroundColor: colors.paper },
@@ -125,11 +213,13 @@ function RootStack() {
               <Stack.Screen name="process/[id]" options={{ title: "" }} />
               <Stack.Screen name="process/link-document" options={{ title: "" }} />
               </Stack>
-            </LockGate>
-          </DriveSyncProvider>
-        </ProcessProvider>
-      </VaultProvider>
-    </SQLiteProvider>
+                </LockGate>
+              </DriveSyncProvider>
+            </ProcessProvider>
+          </VaultGate>
+        </VaultProvider>
+      </SQLiteProvider>
+    </ApplicationBoundary>
   );
 }
 
